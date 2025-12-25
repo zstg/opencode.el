@@ -29,6 +29,9 @@
 ;;; Code:
 
 (require 'comint)
+(require 'json)
+(require 'plz-media-type)
+(require 'plz-event-source)
 
 (defgroup opencode nil
   "Emacs interface to opencode."
@@ -69,7 +72,48 @@ With a prefix argument, prompt for HOST and PORT."
          (buffer (generate-new-buffer "*opencode*")))
     (with-current-buffer buffer
       (opencode-mode))
+    (start-process (format "opencode-pty-%s-%s" host port) (current-buffer) nil)
+    (set-process-query-on-exit-flag (opencode--process) nil)
+    (add-hook 'kill-buffer-hook #'opencode--close-process)
+    (opencode-process-events)
     (pop-to-buffer buffer)))
+
+(defun opencode--process ()
+  "Get the dummy PTY process associated with this opencode buffer."
+  (get-buffer-process (current-buffer)))
+
+(defun opencode--log-event (type event)
+  "Log EVENT of TYPE to the opencode log buffer."
+  (with-current-buffer (get-buffer-create "*opencode-log*")
+    (goto-char (point-max))
+    (insert (format "[%s] %s: %s\n"
+                    (format-time-string "%Y-%m-%d %H:%M:%S")
+                    type
+                    event))))
+
+(defun opencode--close-process (&optional event)
+  "Handle shutdown of opencode server, logging EVENT."
+  (when (opencode--process)
+    (opencode--log-event "CLOSE" event)
+    (delete-process (opencode--process))))
+
+(defun opencode--handle-message (event)
+  "Handle a message EVENT from opencode server."
+  (opencode--log-event "MESSAGE" (json-read-from-string (plz-event-source-event-data event))))
+
+(defun opencode-process-events ()
+  "Connect to the opencode event stream and process all events."
+  (let ((url (format "http://%s:%d/event" opencode-host opencode-port)))
+    (plz-media-type-request
+      'get url
+      :as `(media-types
+            ((text/event-stream
+              . ,(plz-event-source:text/event-stream
+                  :events `((open . ,(lambda (event)
+                                       (opencode--log-event "OPEN" event)))
+                            (message . opencode--handle-message)
+                            (close . opencode--close-process))))))
+      :then 'opencode--close-process)))
 
 (provide 'opencode)
 ;;; opencode.el ends here
