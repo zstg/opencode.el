@@ -1,1 +1,19 @@
 Emacs frontend to opencode
+
+* Installation
+
+Clone this repository and add it to your load path.
+
+#+BEGIN_SRC emacs-lisp
+(add-to-list 'load-path "/path/to/opencode.el")
+(require 'opencode)
+#+END_SRC
+
+* Usage
+
+** Connecting to an OpenCode Server
+
+Run ~M-x opencode~ to connect to an OpenCode server.
+
+By default, it connects to ~localhost:4096~.
+To specify a different host or port, use a prefix argument: ~C-u M-x opencode~.
