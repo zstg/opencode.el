@@ -55,6 +55,12 @@
   :type 'hook
   :group 'opencode)
 
+(defvar opencode-sessions-buffer nil
+  "Buffer of current opencode session.")
+
+(defvar opencode--plz-event-request nil
+  "Request process streaming events from /event on opencode server.")
+
 (define-derived-mode opencode-session-mode comint-mode "OpenCode"
   "Major mode for interacting with an opencode session."
   (setq-local comint-use-prompt-regexp nil
@@ -62,7 +68,7 @@
 
 ;;;###autoload
 (defun opencode (&optional host port)
-  "Start an opencode process.
+  "Connect to opencode server, or open buffer to existing connection.
 If HOST and PORT are not given, use `opencode-host' and `opencode-port'.
 With a prefix argument, prompt for HOST and PORT."
   (interactive
@@ -70,19 +76,21 @@ With a prefix argument, prompt for HOST and PORT."
        (list (read-string "Host: " opencode-host)
              (read-number "Port: " opencode-port))
      (list opencode-host opencode-port)))
-  (let* ((host (or host opencode-host))
-         (port (or port opencode-port))
-         (buffer (generate-new-buffer "*opencode-sessions*")))
-    (with-current-buffer buffer
-      (opencode-session-control-mode)
-      (setq opencode-api-url (format "http://%s:%d" host port))
-      (start-process (format "opencode-pty-%s-%s" host port) buffer nil)
-      (set-process-query-on-exit-flag (opencode--process) nil)
-      (add-hook 'kill-buffer-hook #'opencode--close-process)
-      (add-hook 'kill-buffer-hook #'opencode--disconnect)
-      (opencode-process-events)
-      (opencode-sessions-redisplay))
-    (pop-to-buffer buffer)))
+  (unless (and (get-buffer "*opencode-sessions*")
+               (process-live-p opencode--plz-event-request))
+    (setq opencode-sessions-buffer (generate-new-buffer "*opencode-sessions*"))
+    (let ((host (or host opencode-host))
+          (port (or port opencode-port)))
+      (with-current-buffer opencode-sessions-buffer
+        (opencode-session-control-mode)
+        (setq opencode-api-url (format "http://%s:%d" host port))
+        (start-process (format "opencode-pty-%s-%s" host port) opencode-sessions-buffer nil)
+        (set-process-query-on-exit-flag (opencode--process) nil)
+        (add-hook 'kill-buffer-hook #'opencode--close-process)
+        (add-hook 'kill-buffer-hook #'opencode--disconnect)
+        (opencode-process-events)
+        (opencode-sessions-redisplay))))
+  (pop-to-buffer opencode-sessions-buffer))
 
 (defun opencode--process ()
   "Get the dummy PTY process associated with this opencode buffer."
@@ -125,9 +133,6 @@ With a prefix argument, prompt for HOST and PORT."
       (cl-case (intern (alist-get 'type data))
         (tui.toast.show (opencode--toast-show (alist-get 'properties data)))
         (otherwise (opencode--log-event "WARNING" "unhandled message type"))))))
-
-(defvar opencode--plz-event-request nil
-  "Request process streaming events from /event on opencode server.")
 
 (defun opencode--disconnect ()
   "Disconnect from opencode server."
