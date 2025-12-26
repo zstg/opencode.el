@@ -50,15 +50,23 @@ and saving to CURRENT-BUFFER while running BODY."
 optionally provide ELISP-MACRO-NAME where opencode-api-elisp-macro-name will be
 the name of the created macro."
     (let ((elisp-macro-name
-           (if elisp-macro-name
-               (concat "-" (symbol-name elisp-macro-name))
-             (string-replace "/" "-" path))))
+           (intern
+            (concat "opencode-api"
+                    (if elisp-macro-name
+                        (concat "-" (symbol-name elisp-macro-name))
+                      (string-replace "/" "-" path))))))
       (eval
-       `(defmacro ,(intern (concat "opencode-api" elisp-macro-name))
-            (return-var &rest body)
-          ,(format "Wrapper for opencode %s endpoint." path)
-          (declare (indent defun))
-          (opencode-api--call ',method ,path return-var body)))))
+       (if (seq-contains-p path ?\%)
+           `(defmacro ,elisp-macro-name
+                (args return-var &rest body)
+              ,(format "Wrapper for opencode %s endpoint." path)
+              (declare (indent 2))
+              (opencode-api--call ',method `(format ,,path ,@args) return-var body))
+         `(defmacro ,elisp-macro-name
+              (return-var &rest body)
+            ,(format "Wrapper for opencode %s endpoint." path)
+            (declare (indent defun))
+            (opencode-api--call ',method ,path return-var body))))))
 
   (defun opencode-api-define-wrapper (endpoint)
     "Create a macro wrapping ENDPOINT."
@@ -80,11 +88,23 @@ the name of the created macro."
      "/config"
      (configured-providers "/config/providers")
      (all-providers "/provider")
+     (session "/session/%s")
+     (session-children "/session/%s/children")
+     (session-todos "/session/%s/todo")
+     (session-diff "/session/%s/diff")
+     (session-messages "/session/%s/message")
+     (message-details "/session/%s/message/%s")
      (sessions "/session")
      (sessions-status "/session/status")
      (commands "/command")
      "/file/status"
+     (find-pattern "/find?pattern=%s")
+     (find-files "/find/file?query=%s")
+     (find-symbols "/find/symbol?query=%s")
+     (list-files "/file?path=%s")
+     (read-file "/file/content?path=%s")
      "/experimental/tool/ids"
+     (tools-for-model "/experimental/tool?provider=%s&model=%s")
      "/lsp"
      "/formatter"
      "/mcp"
