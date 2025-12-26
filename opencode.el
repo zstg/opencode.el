@@ -71,10 +71,11 @@ With a prefix argument, prompt for HOST and PORT."
          (port (or port opencode-port))
          (buffer (generate-new-buffer "*opencode*")))
     (with-current-buffer buffer
-      (opencode-mode))
-    (start-process (format "opencode-pty-%s-%s" host port) (current-buffer) nil)
-    (set-process-query-on-exit-flag (opencode--process) nil)
-    (add-hook 'kill-buffer-hook #'opencode--close-process)
+      (opencode-mode)
+      (start-process (format "opencode-pty-%s-%s" host port) buffer nil)
+      (set-process-query-on-exit-flag (opencode--process) nil)
+      (add-hook 'kill-buffer-hook #'opencode--close-process)
+      (add-hook 'kill-buffer-hook #'opencode--disconnect))
     (opencode-process-events)
     (pop-to-buffer buffer)))
 
@@ -101,19 +102,30 @@ With a prefix argument, prompt for HOST and PORT."
   "Handle a message EVENT from opencode server."
   (opencode--log-event "MESSAGE" (json-read-from-string (plz-event-source-event-data event))))
 
+(defvar opencode--plz-event-request nil
+  "Request object streaming events from /event on opencode server.")
+
+(defun opencode--disconnect ()
+  "Disconnect from opencode server."
+  (when (process-live-p opencode--plz-event-request)
+    (opencode--log-event "DISCONNECT" "emacs disconnecting")
+    (kill-process opencode--plz-event-request)))
+
 (defun opencode-process-events ()
   "Connect to the opencode event stream and process all events."
   (let ((url (format "http://%s:%d/event" opencode-host opencode-port)))
-    (plz-media-type-request
-      'get url
-      :as `(media-types
-            ((text/event-stream
-              . ,(plz-event-source:text/event-stream
-                  :events `((open . ,(lambda (event)
-                                       (opencode--log-event "OPEN" event)))
-                            (message . opencode--handle-message)
-                            (close . opencode--close-process))))))
-      :then 'opencode--close-process)))
+    (setf opencode--plz-event-request
+          (plz-media-type-request
+            'get url
+            :as `(media-types
+                  ((text/event-stream
+                    . ,(plz-event-source:text/event-stream
+                        :events `((open . ,(lambda (event)
+                                             (opencode--log-event "OPEN" event)))
+                                  (message . opencode--handle-message)
+                                  (close . opencode--close-process))))))
+            :then 'opencode--close-process
+            :else 'opencode--close-process))))
 
 (provide 'opencode)
 ;;; opencode.el ends here
