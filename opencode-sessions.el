@@ -39,15 +39,16 @@
     (opencode-api-delete-session (.id)
         result
       (if result
-          (message "session deleted")
-        (message "session failed to delete")))))
+          (opencode-sessions-redisplay)
+        (error "Unable to delete session")))))
 
 (defun opencode-sessions-redisplay ()
   "Refresh the session display table."
   (interactive)
   (opencode-api-sessions sessions
     (with-current-buffer opencode-sessions-buffer
-      (let ((inhibit-read-only t))
+      (let ((inhibit-read-only t)
+            (point (point)))
         (erase-buffer)
         (if sessions
             (make-vtable :columns '("Title"
@@ -57,7 +58,7 @@
                                     (:name "Files changed" :width 13 :align right)
                                     "Created at")
                          :objects sessions
-                         :actions '("k" opencode-kill-session)
+                         :actions '("x" opencode-kill-session)
                          :getter (lambda (object column vtable)
                                    (pcase (vtable-column vtable column)
                                      ("Title" (alist-get 'title object))
@@ -75,8 +76,11 @@
                                                                                    (alist-get 'time
                                                                                               object))
                                                                         1000))))))
-                         :separator-width 3)
-          (insert "No sessions"))))))
+                         :separator-width 3
+                         :keymap (define-keymap
+                                   "r" 'opencode-sessions-redisplay))
+          (insert "No sessions"))
+        (goto-char point)))))
 
 (provide 'opencode-sessions)
 ;;; opencode-sessions.el ends here
