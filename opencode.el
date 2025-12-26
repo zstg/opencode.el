@@ -55,9 +55,6 @@
   :type 'hook
   :group 'opencode)
 
-(defvar opencode-sessions-buffer nil
-  "Buffer of current opencode session.")
-
 (defvar opencode--plz-event-request nil
   "Request process streaming events from /event on opencode server.")
 
@@ -88,8 +85,8 @@ With a prefix argument, prompt for HOST and PORT."
         (set-process-query-on-exit-flag (opencode--process) nil)
         (add-hook 'kill-buffer-hook #'opencode--close-process)
         (add-hook 'kill-buffer-hook #'opencode--disconnect)
-        (opencode-process-events)
-        (opencode-sessions-redisplay))))
+        (opencode-process-events))))
+  (opencode-sessions-redisplay)
   (pop-to-buffer opencode-sessions-buffer))
 
 (defun opencode--process ()

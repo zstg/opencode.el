@@ -91,7 +91,7 @@ the name of the created macro."
     "Create a macro wrapping ENDPOINT."
     (let ((method 'get))
       (when (and (listp endpoint)
-                 (seq-contains-p '(get post postdata) (car endpoint)))
+                 (seq-contains-p '(get post postdata delete) (car endpoint)))
         (setf method (pop endpoint)))
       (pcase endpoint
         ((pred stringp) (opencode-api--wrap method endpoint))
@@ -120,6 +120,9 @@ the name of the created macro."
      (message-details "/session/%s/message/%s")
      (sessions "/session")
      (sessions-status "/session/status")
+     (postdata create-session "/session")
+     (post abort-session "/session/%s/abort")
+     (delete delete-session "/session/%s")
      (commands "/command")
      "/file/status"
      (find-pattern "/find?pattern=%s")
@@ -133,8 +136,7 @@ the name of the created macro."
      "/formatter"
      "/mcp"
      (agents "/agent")
-     (post dispose-instance "/instance/dispose")
-     (postdata create-session "/session"))))
+     (post dispose-instance "/instance/dispose"))))
 
 (provide 'opencode-api)
 ;;; opencode-api.el ends here

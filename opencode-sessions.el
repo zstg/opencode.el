@@ -27,42 +27,56 @@
 (require 'opencode-api)
 (require 'vtable)
 
+(defvar opencode-sessions-buffer nil
+  "Buffer of current opencode session.")
+
 (define-derived-mode opencode-session-control-mode special-mode "Sessions"
   "Opencode session control panel mode.")
+
+(defun opencode-kill-session (session)
+  "Kill SESSION."
+  (let-alist session
+    (opencode-api-delete-session (.id)
+        result
+      (if result
+          (message "session deleted")
+        (message "session failed to delete")))))
 
 (defun opencode-sessions-redisplay ()
   "Refresh the session display table."
   (interactive)
   (opencode-api-sessions sessions
-    (let ((inhibit-read-only t))
-      (erase-buffer)
-      (if sessions
-          (make-vtable :columns '("Title"
-                                  (:name "Last Updated" :width 12
-                                   :formatter seconds-to-string
-                                   :primary ascend)
-                                  (:name "Files changed" :width 13 :align right)
-                                  "Created at")
-                       :objects sessions
-                       :getter (lambda (object column vtable)
-                                 (pcase (vtable-column vtable column)
-                                   ("Title" (alist-get 'title object))
-                                   ("Last Updated" (- (float-time)
-                                                      (/ (alist-get 'updated
-                                                                    (alist-get 'time object))
-                                                         1000)))
-                                   ("Files changed" (let-alist (alist-get 'summary object)
-                                                      (if (or (null .files) (zerop .files))
-                                                          "none"
-                                                        (format "%d  +%d-%d" .files .additions .deletions))))
-                                   ("Created at" (format-time-string
-                                                  "%Y-%m-%d %H:%M:%S"
-                                                  (seconds-to-time (/ (alist-get 'created
-                                                                                 (alist-get 'time
-                                                                                            object))
-                                                                      1000))))))
-                       :separator-width 3)
-        (insert "No sessions")))))
+    (with-current-buffer opencode-sessions-buffer
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (if sessions
+            (make-vtable :columns '("Title"
+                                    (:name "Last Updated" :width 12
+                                     :formatter seconds-to-string
+                                     :primary ascend)
+                                    (:name "Files changed" :width 13 :align right)
+                                    "Created at")
+                         :objects sessions
+                         :actions '("k" opencode-kill-session)
+                         :getter (lambda (object column vtable)
+                                   (pcase (vtable-column vtable column)
+                                     ("Title" (alist-get 'title object))
+                                     ("Last Updated" (- (float-time)
+                                                        (/ (alist-get 'updated
+                                                                      (alist-get 'time object))
+                                                           1000)))
+                                     ("Files changed" (let-alist (alist-get 'summary object)
+                                                        (if (or (null .files) (zerop .files))
+                                                            "none"
+                                                          (format "%d  +%d-%d" .files .additions .deletions))))
+                                     ("Created at" (format-time-string
+                                                    "%Y-%m-%d %H:%M:%S"
+                                                    (seconds-to-time (/ (alist-get 'created
+                                                                                   (alist-get 'time
+                                                                                              object))
+                                                                        1000))))))
+                         :separator-width 3)
+          (insert "No sessions"))))))
 
 (provide 'opencode-sessions)
 ;;; opencode-sessions.el ends here
