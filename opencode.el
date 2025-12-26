@@ -127,7 +127,7 @@ With a prefix argument, prompt for HOST and PORT."
         (otherwise (opencode--log-event "WARNING" "unhandled message type"))))))
 
 (defvar opencode--plz-event-request nil
-  "Request object streaming events from /event on opencode server.")
+  "Request process streaming events from /event on opencode server.")
 
 (defun opencode--disconnect ()
   "Disconnect from opencode server."
@@ -148,7 +148,8 @@ With a prefix argument, prompt for HOST and PORT."
                                 (message . opencode--handle-message)
                                 (close . opencode--close-process))))))
           :then 'opencode--close-process
-          :else 'opencode--close-process)))
+          :else 'opencode--close-process))
+  (set-process-query-on-exit-flag opencode--plz-event-request nil))
 
 (provide 'opencode)
 ;;; opencode.el ends here
