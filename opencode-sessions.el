@@ -24,7 +24,6 @@
 
 ;;; Code:
 
-(require 'opencode)
 (require 'opencode-api)
 (require 'vtable)
 
