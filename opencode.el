@@ -5,7 +5,7 @@
 ;; Author: Scott Zimmermann <sczi@disroot.org>
 ;; Keywords: tools, llm, opencode
 ;; Package-Version: 0.0.1
-;; Package-Requires: ((emacs "25.1"))
+;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://codeberg.org/sczi/opencode.el/
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -31,6 +31,8 @@
 (require 'comint)
 (require 'json)
 (require 'notifications)
+(require 'opencode-api)
+(require 'opencode-sessions)
 (require 'plz-media-type)
 (require 'plz-event-source)
 
@@ -53,8 +55,8 @@
   :type 'hook
   :group 'opencode)
 
-(define-derived-mode opencode-mode comint-mode "OpenCode"
-  "Major mode for interacting with opencode."
+(define-derived-mode opencode-session-mode comint-mode "OpenCode"
+  "Major mode for interacting with an opencode session."
   (setq-local comint-use-prompt-regexp nil
               mode-line-process nil))
 
@@ -70,14 +72,16 @@ With a prefix argument, prompt for HOST and PORT."
      (list opencode-host opencode-port)))
   (let* ((host (or host opencode-host))
          (port (or port opencode-port))
-         (buffer (generate-new-buffer "*opencode*")))
+         (buffer (generate-new-buffer "*opencode-sessions*")))
     (with-current-buffer buffer
-      (opencode-mode)
+      (opencode-session-control-mode)
+      (setq opencode-api-url (format "http://%s:%d" host port))
       (start-process (format "opencode-pty-%s-%s" host port) buffer nil)
       (set-process-query-on-exit-flag (opencode--process) nil)
       (add-hook 'kill-buffer-hook #'opencode--close-process)
-      (add-hook 'kill-buffer-hook #'opencode--disconnect))
-    (opencode-process-events)
+      (add-hook 'kill-buffer-hook #'opencode--disconnect)
+      (opencode-process-events)
+      (opencode-sessions-redisplay))
     (pop-to-buffer buffer)))
 
 (defun opencode--process ()
@@ -133,19 +137,18 @@ With a prefix argument, prompt for HOST and PORT."
 
 (defun opencode-process-events ()
   "Connect to the opencode event stream and process all events."
-  (let ((url (format "http://%s:%d/event" opencode-host opencode-port)))
-    (setf opencode--plz-event-request
-          (plz-media-type-request
-            'get url
-            :as `(media-types
-                  ((text/event-stream
-                    . ,(plz-event-source:text/event-stream
-                        :events `((open . ,(lambda (event)
-                                             (opencode--log-event "OPEN" event)))
-                                  (message . opencode--handle-message)
-                                  (close . opencode--close-process))))))
-            :then 'opencode--close-process
-            :else 'opencode--close-process))))
+  (setf opencode--plz-event-request
+        (plz-media-type-request
+          'get (concat opencode-api-url "/event")
+          :as `(media-types
+                ((text/event-stream
+                  . ,(plz-event-source:text/event-stream
+                      :events `((open . ,(lambda (event)
+                                           (opencode--log-event "OPEN" event)))
+                                (message . opencode--handle-message)
+                                (close . opencode--close-process))))))
+          :then 'opencode--close-process
+          :else 'opencode--close-process)))
 
 (provide 'opencode)
 ;;; opencode.el ends here
