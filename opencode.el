@@ -5,7 +5,7 @@
 ;; Author: Scott Zimmermann <sczi@disroot.org>
 ;; Keywords: tools, llm, opencode
 ;; Package-Version: 0.0.1
-;; Package-Requires: ((emacs "24.3"))
+;; Package-Requires: ((emacs "25.1"))
 ;; URL: https://codeberg.org/sczi/opencode.el/
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -30,6 +30,7 @@
 
 (require 'comint)
 (require 'json)
+(require 'notifications)
 (require 'plz-media-type)
 (require 'plz-event-source)
 
@@ -98,9 +99,28 @@ With a prefix argument, prompt for HOST and PORT."
     (opencode--log-event "CLOSE" event)
     (delete-process (opencode--process))))
 
+(defun opencode--toast-show (properties)
+  "Show toast notification with PROPERTIES from opencode."
+  (let-alist properties
+    (notifications-notify
+     :title .title
+     :body .message
+     :urgency (pcase .variant
+                ("error" 'critical)
+                ("warning" 'critical)
+                ((or "info" "success") 'normal))
+     :timeout .duration
+     :replaces-id 5647
+     :app-icon 'none)))
+
 (defun opencode--handle-message (event)
   "Handle a message EVENT from opencode server."
-  (opencode--log-event "MESSAGE" (json-read-from-string (plz-event-source-event-data event))))
+  (let ((data (json-read-from-string (plz-event-source-event-data event))))
+    (opencode--log-event "MESSAGE" data)
+    (let-alist (alist-get 'properties data)
+      (cl-case (intern (alist-get 'type data))
+        (tui.toast.show (opencode--toast-show (alist-get 'properties data)))
+        (otherwise (opencode--log-event "WARNING" "unhandled message type"))))))
 
 (defvar opencode--plz-event-request nil
   "Request object streaming events from /event on opencode server.")
