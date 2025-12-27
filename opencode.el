@@ -129,6 +129,10 @@ With a prefix argument, prompt for HOST and PORT."
     (let-alist (alist-get 'properties data)
       (cl-case (intern (alist-get 'type data))
         (tui.toast.show (opencode--toast-show (alist-get 'properties data)))
+        (session.idle (opencode--toast-show '((title . "Opencode")
+                                              (message . "response finished")
+                                              (variant . "success")
+                                              (timeout . 1000))))
         (otherwise (opencode--log-event "WARNING" "unhandled message type"))))))
 
 (defun opencode--disconnect ()
