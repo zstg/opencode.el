@@ -24,6 +24,7 @@
 
 ;;; Code:
 
+(require 'comint)
 (require 'opencode-api)
 (require 'vtable)
 
@@ -33,14 +34,49 @@
 (define-derived-mode opencode-session-control-mode special-mode "Sessions"
   "Opencode session control panel mode.")
 
+(define-derived-mode opencode-session-mode comint-mode "OpenCode"
+  "Major mode for interacting with an opencode session."
+  (setq-local comint-use-prompt-regexp nil
+              mode-line-process nil))
+
 (defun opencode-kill-session (session)
   "Kill SESSION."
+  (opencode-api-delete-session ((alist-get 'id session))
+      result
+    (if result
+        (opencode-sessions-redisplay)
+      (error "Unable to delete session"))))
+
+(defun opencode-open-session (session)
+  "Open comint based shell for SESSION."
   (let-alist session
-    (opencode-api-delete-session (.id)
-        result
-      (if result
-          (opencode-sessions-redisplay)
-        (error "Unable to delete session")))))
+    (let ((buffer-name (format "*OpenCode: %s*" .title)))
+      (if (get-buffer buffer-name)
+          (pop-to-buffer buffer-name)
+        (with-current-buffer (get-buffer-create buffer-name)
+          (comint-mode)
+          (let ((proc (make-pipe-process
+                       :name "dummy-process"
+                       :buffer buffer-name
+                       :noquery t)))
+            (opencode-api-session-messages (.id)
+                messages
+              (dolist (message messages)
+                (let-alist (alist-get 'info message)
+                  (pcase .role
+                    ("user"
+                     (dolist (part (alist-get 'parts message))
+                       (let-alist part
+                         (pcase .type
+                           ("text" (insert .text)))))
+                     (insert "\n")
+                     (comint-send-input))
+                    ("assistant" (dolist (part (alist-get 'parts message))
+                                   (let-alist part
+                                     (pcase .type
+                                       ("text" (comint-output-filter proc .text)))))
+                     (comint-output-filter proc "\n\n")))))))
+          (pop-to-buffer buffer-name))))))
 
 (defun opencode-sessions-redisplay ()
   "Refresh the session display table."
@@ -58,7 +94,9 @@
                                     (:name "Files changed" :width 13 :align right)
                                     "Created at")
                          :objects sessions
-                         :actions '("x" opencode-kill-session)
+                         :actions '("x" opencode-kill-session
+                                    "RET" opencode-open-session
+                                    "o" opencode-open-session)
                          :getter (lambda (object column vtable)
                                    (pcase (vtable-column vtable column)
                                      ("Title" (alist-get 'title object))

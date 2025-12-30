@@ -43,8 +43,8 @@ and saving to CURRENT-BUFFER while running BODY."
            ,@(when data
                `(:headers '(("Content-Type" . "application/json"))
                  :body (json-encode ,data)))
-           :then (lambda (alist)
-                   (let ((,return-var alist))
+           :then (lambda (result)
+                   (let ((,return-var result))
                      (with-current-buffer ,current-buffer
                        ,@body)))
            :else (lambda (response)

@@ -28,7 +28,6 @@
 
 ;;; Code:
 
-(require 'comint)
 (require 'json)
 (require 'notifications)
 (require 'opencode-api)
@@ -58,11 +57,6 @@
 (defvar opencode--plz-event-request nil
   "Request process streaming events from /event on opencode server.")
 
-(define-derived-mode opencode-session-mode comint-mode "OpenCode"
-  "Major mode for interacting with an opencode session."
-  (setq-local comint-use-prompt-regexp nil
-              mode-line-process nil))
-
 ;;;###autoload
 (defun opencode (&optional host port)
   "Connect to opencode server, or open buffer to existing connection.
@@ -75,7 +69,7 @@ With a prefix argument, prompt for HOST and PORT."
      (list opencode-host opencode-port)))
   (unless (and (get-buffer "*opencode-sessions*")
                (process-live-p opencode--plz-event-request))
-    (setq opencode-sessions-buffer (generate-new-buffer "*opencode-sessions*"))
+    (setq opencode-sessions-buffer (generate-new-buffer "*OpenCode Sessions*"))
     (let ((host (or host opencode-host))
           (port (or port opencode-port)))
       (with-current-buffer opencode-sessions-buffer
