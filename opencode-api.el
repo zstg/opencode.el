@@ -70,7 +70,9 @@ and saving to CURRENT-BUFFER while running BODY."
                          (insert "RESPONSE: ")
                          (pp ,result (current-buffer)))))
                    (let ((,return-var ,result))
-                     (with-current-buffer ,current-buffer
+                     (if (buffer-live-p ,current-buffer)
+                         (with-current-buffer ,current-buffer
+                           ,@body)
                        ,@body)))
            :else (lambda (response)
                    (let ((error-msg (format "error requesting %s: %s" ,path response)))
