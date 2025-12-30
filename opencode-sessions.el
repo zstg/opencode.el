@@ -51,7 +51,18 @@
   '((t :inherit outline-1 :height reset))
   "OpenCode margin face to apply to user requests."
   :group 'opencode)
+
+(defface opencode-reasoning-margin-highlight
+  '((t :inherit outline-2 :height reset))
+  "OpenCode margin face to apply to reasoning blocks."
   :group 'opencode)
+
+(defun opencode--line-prefix (face)
+  "Return line prefix with FACE."
+  (propertize ">" 'display
+              `((margin left-margin)
+                ,(propertize "▎" 'face
+                             face))))
 
 (defun opencode--replay-user-request (message)
   "Replay a user request MESSAGE."
@@ -64,10 +75,15 @@
     (comint-send-input)
     (overlay-put (make-overlay beginning (1- (point)))
                  'line-prefix
-                 (propertize ">" 'display
-                             `((margin left-margin)
-                               ,(propertize "▎" 'face
-                                            'opencode-request-margin-highlight))))))
+                 (opencode--line-prefix 'opencode-request-margin-highlight))))
+
+(defun opencode--insert-reasoning-block (text)
+  "Insert TEXT as reasoning block."
+  (let ((beginning (point)))
+    (comint-output-filter (get-buffer-process (current-buffer)) text)
+    (overlay-put (make-overlay beginning (point))
+                 'line-prefix
+                 (opencode--line-prefix 'opencode-reasoning-margin-highlight))))
 
 (defun opencode-open-session (session)
   "Open comint based shell for SESSION."
@@ -90,7 +106,8 @@
                     ("assistant" (dolist (part (alist-get 'parts message))
                                    (let-alist part
                                      (pcase .type
-                                       ("text" (comint-output-filter proc .text)))))
+                                       ("text" (comint-output-filter proc .text))
+                                       ("reasoning" (opencode--insert-reasoning-block .text)))))
                      (comint-output-filter proc "\n\n")))))
               (setq left-margin-width (1+ left-margin-width))
               (set-window-buffer nil (current-buffer))))
