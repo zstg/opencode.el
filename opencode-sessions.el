@@ -55,10 +55,9 @@
           (pop-to-buffer buffer-name)
         (with-current-buffer (get-buffer-create buffer-name)
           (comint-mode)
-          (let ((proc (make-pipe-process
-                       :name "dummy-process"
-                       :buffer buffer-name
-                       :noquery t)))
+          (setq-local comint-input-sender #'ignore)
+          (let ((proc (start-process buffer-name buffer-name nil)))
+            (set-process-query-on-exit-flag proc nil)
             (opencode-api-session-messages (.id)
                 messages
               (dolist (message messages)

@@ -67,25 +67,15 @@ With a prefix argument, prompt for HOST and PORT."
        (list (read-string "Host: " opencode-host)
              (read-number "Port: " opencode-port))
      (list opencode-host opencode-port)))
-  (unless (and (get-buffer "*OpenCode Sessions*")
-               (process-live-p opencode--plz-event-request))
+  (unless (process-live-p opencode--plz-event-request)
     (setq opencode-sessions-buffer (generate-new-buffer "*OpenCode Sessions*"))
-    (let ((host (or host opencode-host))
-          (port (or port opencode-port)))
-      (with-current-buffer opencode-sessions-buffer
-        (opencode-session-control-mode)
-        (setq opencode-api-url (format "http://%s:%d" host port))
-        (start-process (format "opencode-pty-%s-%s" host port) opencode-sessions-buffer nil)
-        (set-process-query-on-exit-flag (opencode--process) nil)
-        (add-hook 'kill-buffer-hook #'opencode--close-process)
-        (add-hook 'kill-buffer-hook #'opencode--disconnect)
-        (opencode-process-events))))
+    (with-current-buffer opencode-sessions-buffer
+      (opencode-session-control-mode)
+      (setq opencode-api-url (format "http://%s:%d" host port))
+      (add-hook 'kill-buffer-hook #'opencode--disconnect)
+      (opencode-process-events)))
   (opencode-sessions-redisplay)
   (pop-to-buffer opencode-sessions-buffer))
-
-(defun opencode--process ()
-  "Get the dummy PTY process associated with this opencode buffer."
-  (get-buffer-process (current-buffer)))
 
 (defvar opencode-event-log-max-lines 5000
   "Maximum number of lines to log in the opencode event log buffer.")
@@ -102,12 +92,6 @@ With a prefix argument, prompt for HOST and PORT."
       (when (> (line-number-at-pos) opencode-event-log-max-lines)
         (goto-char (point-min))
         (delete-line)))))
-
-(defun opencode--close-process (&optional event)
-  "Handle shutdown of opencode server, logging EVENT."
-  (when (opencode--process)
-    (opencode--log-event "CLOSE" event)
-    (delete-process (opencode--process))))
 
 (defun opencode--toast-show (properties)
   "Show toast notification with PROPERTIES from opencode."
@@ -138,10 +122,10 @@ With a prefix argument, prompt for HOST and PORT."
                                                 (timeout . 1000)))))
         (otherwise (opencode--log-event "WARNING" "unhandled message type"))))))
 
-(defun opencode--disconnect ()
-  "Disconnect from opencode server."
+(defun opencode--disconnect (&optional event)
+  "Disconnect from opencode server, optionally log EVENT."
+  (opencode--log-event "DISCONNECT" event)
   (when (process-live-p opencode--plz-event-request)
-    (opencode--log-event "DISCONNECT" "emacs disconnecting")
     (kill-process opencode--plz-event-request)))
 
 (defun opencode-process-events ()
@@ -155,9 +139,9 @@ With a prefix argument, prompt for HOST and PORT."
                       :events `((open . ,(lambda (event)
                                            (opencode--log-event "OPEN" event)))
                                 (message . opencode--handle-message)
-                                (close . opencode--close-process))))))
-          :then 'opencode--close-process
-          :else 'opencode--close-process))
+                                (close . opencode--disconnect))))))
+          :then 'opencode--disconnect
+          :else 'opencode--disconnect))
   (set-process-query-on-exit-flag opencode--plz-event-request nil))
 
 (provide 'opencode)
