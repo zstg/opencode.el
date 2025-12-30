@@ -77,7 +77,8 @@
           (pop-to-buffer buffer-name)
         (with-current-buffer (get-buffer-create buffer-name)
           (comint-mode)
-          (setq-local comint-input-sender #'ignore)
+          (setq-local comint-input-sender #'ignore
+                      comint-highlight-input nil)
           (let ((proc (start-process buffer-name buffer-name nil)))
             (set-process-query-on-exit-flag proc nil)
             (opencode-api-session-messages (.id)
