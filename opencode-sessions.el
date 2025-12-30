@@ -57,12 +57,15 @@
   "OpenCode margin face to apply to reasoning blocks."
   :group 'opencode)
 
-(defun opencode--line-prefix (face)
-  "Return line prefix with FACE."
-  (propertize ">" 'display
-              `((margin left-margin)
-                ,(propertize "▎" 'face
-                             face))))
+(defun opencode--add-margin (start end face)
+  "Display margin from START (inclusive) to END (exclusive) with FACE."
+  (let ((ov (make-overlay start (1- end)))
+        (margin (propertize ">" 'display
+                            `((margin left-margin)
+                              ,(propertize "▎" 'face
+                                           face)))))
+    (overlay-put ov 'line-prefix margin)
+    (overlay-put ov 'wrap-prefix margin)))
 
 (defun opencode--replay-user-request (message)
   "Replay a user request MESSAGE."
@@ -73,17 +76,13 @@
           ("text" (insert .text)))))
     (insert "\n")
     (comint-send-input)
-    (overlay-put (make-overlay beginning (1- (point)))
-                 'line-prefix
-                 (opencode--line-prefix 'opencode-request-margin-highlight))))
+    (opencode--add-margin beginning (point) 'opencode-request-margin-highlight)))
 
 (defun opencode--insert-reasoning-block (text)
   "Insert TEXT as reasoning block."
   (let ((beginning (point)))
     (comint-output-filter (get-buffer-process (current-buffer)) text)
-    (overlay-put (make-overlay beginning (point))
-                 'line-prefix
-                 (opencode--line-prefix 'opencode-reasoning-margin-highlight))))
+    (opencode--add-margin beginning (point) 'opencode-reasoning-margin-highlight)))
 
 (defun opencode-open-session (session)
   "Open comint based shell for SESSION."
@@ -93,6 +92,8 @@
           (pop-to-buffer buffer-name)
         (with-current-buffer (get-buffer-create buffer-name)
           (comint-mode)
+          (visual-line-mode)
+          (setq left-margin-width (1+ left-margin-width))
           (setq-local comint-input-sender #'ignore
                       comint-highlight-input nil)
           (let ((proc (start-process buffer-name buffer-name nil)))
@@ -105,12 +106,10 @@
                     ("user" (opencode--replay-user-request message))
                     ("assistant" (dolist (part (alist-get 'parts message))
                                    (let-alist part
-                                     (pcase .type
-                                       ("text" (comint-output-filter proc .text))
-                                       ("reasoning" (opencode--insert-reasoning-block .text)))))
-                     (comint-output-filter proc "\n\n")))))
-              (setq left-margin-width (1+ left-margin-width))
-              (set-window-buffer nil (current-buffer))))
+                                     (let ((text (concat .text "\n\n")))
+                                       (pcase .type
+                                         ("text" (comint-output-filter proc text))
+                                         ("reasoning" (opencode--insert-reasoning-block text))))))))))))
           (pop-to-buffer buffer-name))))))
 
 (defun opencode-sessions-redisplay ()
