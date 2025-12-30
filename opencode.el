@@ -72,7 +72,7 @@ With a prefix argument, prompt for HOST and PORT."
     (with-current-buffer opencode-sessions-buffer
       (opencode-session-control-mode)
       (setq opencode-api-url (format "http://%s:%d" host port))
-      (add-hook 'kill-buffer-hook #'opencode--disconnect)
+      (add-hook 'kill-buffer-hook #'opencode--disconnect nil t)
       (opencode-process-events)))
   (opencode-sessions-redisplay)
   (pop-to-buffer opencode-sessions-buffer))
