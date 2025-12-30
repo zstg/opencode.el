@@ -30,25 +30,56 @@
 (defvar opencode-api-url nil
   "URL of the opencode server we're connected to.")
 
+(defvar opencode-api-log-max-lines nil
+  "Maximum number of lines of opencode api requests and responses to log.
+Or nil (default) to turn off logging.")
+
 (eval-and-compile
   (cl-defun opencode-api--call (method path return-var body &key data)
     "Generate the body of an opencode api wrapper macro.
 Using METHOD, for endpoint PATH, saving result in RETURN-VAR,
 and saving to CURRENT-BUFFER while running BODY."
-    (cl-with-gensyms (current-buffer)
+    (cl-with-gensyms (current-buffer result)
       `(let ((,current-buffer (current-buffer)))
+         (when opencode-api-log-max-lines
+           (with-current-buffer (get-buffer-create "*opencode-api-log*")
+             (save-excursion
+               (goto-char (point-max))
+               (insert "REQUEST: " ,path "\n")
+               (when ,data
+                 (insert "REQUEST BODY:")
+                 (pp ,data (current-buffer)))
+               (let ((lines (line-number-at-pos)))
+                 (when (> lines opencode-api-log-max-lines)
+                   (save-excursion
+                     (goto-char (point-min))
+                     (delete-region (point)
+                                    (line-beginning-position (- lines opencode-api-log-max-lines)))))))))
          (plz ',method (concat opencode-api-url ,path)
            :as (lambda () (json-parse-buffer :array-type 'list
                                         :object-type 'alist))
            ,@(when data
                `(:headers '(("Content-Type" . "application/json"))
                  :body (json-encode ,data)))
-           :then (lambda (result)
-                   (let ((,return-var result))
+           :then (lambda (,result)
+                   (when opencode-api-log-max-lines
+                     (with-current-buffer
+                         (get-buffer-create "*opencode-api-log*")
+                       (save-excursion
+                         (goto-char (point-max))
+                         (insert "RESPONSE: ")
+                         (pp ,result (current-buffer)))))
+                   (let ((,return-var ,result))
                      (with-current-buffer ,current-buffer
                        ,@body)))
            :else (lambda (response)
-                   (error (format "error requesting %s: %s" ,path response)))))))
+                   (let ((error-msg (format "error requesting %s: %s" ,path response)))
+                     (with-current-buffer
+                         (get-buffer-create "*opencode-api-log*")
+                       (save-excursion
+                         (goto-char (point-max))
+                         (insert "ERROR: " error-msg "\n")))
+                     (error error-msg)))))))
 
   (cl-defun opencode-api--wrap (method path &key elisp-macro-name)
     "Define a macro to wrap api call with METHOD and PATH.
