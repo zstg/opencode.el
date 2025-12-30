@@ -47,6 +47,28 @@
         (opencode-sessions-redisplay)
       (error "Unable to delete session"))))
 
+(defface opencode-request-margin-highlight
+  '((t :inherit outline-1 :height reset))
+  "OpenCode margin face to apply to user requests."
+  :group 'opencode)
+  :group 'opencode)
+
+(defun opencode--replay-user-request (message)
+  "Replay a user request MESSAGE."
+  (let ((beginning (point)))
+    (dolist (part (alist-get 'parts message))
+      (let-alist part
+        (pcase .type
+          ("text" (insert .text)))))
+    (insert "\n")
+    (comint-send-input)
+    (overlay-put (make-overlay beginning (1- (point)))
+                 'line-prefix
+                 (propertize ">" 'display
+                             `((margin left-margin)
+                               ,(propertize "▎" 'face
+                                            'opencode-request-margin-highlight))))))
+
 (defun opencode-open-session (session)
   "Open comint based shell for SESSION."
   (let-alist session
@@ -63,18 +85,14 @@
               (dolist (message messages)
                 (let-alist (alist-get 'info message)
                   (pcase .role
-                    ("user"
-                     (dolist (part (alist-get 'parts message))
-                       (let-alist part
-                         (pcase .type
-                           ("text" (insert .text)))))
-                     (insert "\n")
-                     (comint-send-input))
+                    ("user" (opencode--replay-user-request message))
                     ("assistant" (dolist (part (alist-get 'parts message))
                                    (let-alist part
                                      (pcase .type
                                        ("text" (comint-output-filter proc .text)))))
-                     (comint-output-filter proc "\n\n")))))))
+                     (comint-output-filter proc "\n\n")))))
+              (setq left-margin-width (1+ left-margin-width))
+              (set-window-buffer nil (current-buffer))))
           (pop-to-buffer buffer-name))))))
 
 (defun opencode-sessions-redisplay ()
