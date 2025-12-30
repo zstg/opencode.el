@@ -56,8 +56,9 @@ and saving to CURRENT-BUFFER while running BODY."
                      (delete-region (point)
                                     (line-beginning-position (- lines opencode-api-log-max-lines)))))))))
          (plz ',method (concat opencode-api-url ,path)
-           :as (lambda () (json-parse-buffer :array-type 'list
-                                        :object-type 'alist))
+           :as (lambda () (unless (string-empty-p (buffer-string))
+                       (json-parse-buffer :array-type 'list
+                                          :object-type 'alist)))
            ,@(when data
                `(:headers '(("Content-Type" . "application/json"))
                  :body (json-encode ,data)))
@@ -150,6 +151,7 @@ the name of the created macro."
      (session-todos "/session/%s/todo")
      (session-diff "/session/%s/diff")
      (session-messages "/session/%s/message")
+     (postdata send-message "/session/%s/prompt_async")
      (message-details "/session/%s/message/%s")
      (sessions "/session")
      (sessions-status "/session/status")

@@ -39,11 +39,14 @@
   (define-keymap
     "C-c C-y" 'opencode-yank-code-block))
 
+(defvar-local opencode-session-id nil
+  "Session id for the current opencode session buffer.")
+
 (define-derived-mode opencode-session-mode comint-mode "OpenCode"
   "Major mode for interacting with an opencode session."
   (setq-local comint-use-prompt-regexp nil
               mode-line-process nil
-              comint-input-sender #'ignore
+              comint-input-sender 'opencode--send-input
               comint-highlight-input nil
               left-margin-width (1+ left-margin-width))
   (visual-line-mode)
@@ -67,6 +70,22 @@
     (if result
         (opencode-sessions-redisplay)
       (error "Unable to delete session"))))
+
+(defun opencode--highlight-input (&optional _proc _string)
+  "Highlight last prompt input."
+  (opencode--add-margin comint-last-input-start
+                        comint-last-input-end
+                        'opencode-request-margin-highlight))
+
+(defun opencode--send-input (_proc string)
+  "Send STRING as input to current opencode session."
+  (insert "\n")
+  (opencode--highlight-input)
+  (opencode-api-send-message (opencode-session-id)
+      `((agent . Planner-Sisyphus)
+        (model (providerID . opencode) (modelID . grok-code))
+        (parts ((type . text) (text . ,string))))
+      _result))
 
 (defface opencode-request-margin-highlight
   '((t :inherit outline-1 :height reset))
@@ -105,14 +124,13 @@
 
 (defun opencode--replay-user-request (message)
   "Replay a user request MESSAGE."
-  (let ((beginning (point)))
-    (dolist (part (alist-get 'parts message))
-      (let-alist part
-        (pcase .type
-          ("text" (insert .text)))))
-    (insert "\n")
-    (comint-send-input)
-    (opencode--add-margin beginning (point) 'opencode-request-margin-highlight)))
+  (dolist (part (alist-get 'parts message))
+    (let-alist part
+      (pcase .type
+        ("text" (insert .text)))))
+  (insert "\n")
+  (let ((comint-input-sender #'opencode--highlight-input))
+    (comint-send-input)))
 
 (defun opencode--insert-reasoning-block (text)
   "Insert TEXT as reasoning block."
@@ -128,6 +146,7 @@
           (pop-to-buffer buffer-name)
         (with-current-buffer (get-buffer-create buffer-name)
           (opencode-session-mode)
+          (setq opencode-session-id .id)
           (let ((proc (start-process buffer-name buffer-name nil)))
             (set-process-query-on-exit-flag proc nil)
             (opencode-api-session-messages (.id)
