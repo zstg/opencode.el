@@ -35,6 +35,10 @@
 (define-derived-mode opencode-session-control-mode special-mode "Sessions"
   "Opencode session control panel mode.")
 
+(defvar opencode-session-mode-map
+  (define-keymap
+    "C-c C-y" 'opencode-yank-code-block))
+
 (define-derived-mode opencode-session-mode comint-mode "OpenCode"
   "Major mode for interacting with an opencode session."
   (setq-local comint-use-prompt-regexp nil
@@ -46,6 +50,15 @@
   (font-lock-mode -1)
   (add-hook 'comint-preoutput-filter-functions 'opencode--render-markdown nil t)
   (add-hook 'comint-input-filter-functions 'opencode--render-input-markdown nil t))
+
+(defun opencode-yank-code-block ()
+  "Yank the markdown code block under point."
+  (interactive)
+  (save-excursion
+    (markdown-backward-block)
+    (copy-region-as-kill (point)
+                         (progn (markdown-forward-block)
+                                (point)))))
 
 (defun opencode-kill-session (session)
   "Kill SESSION."
