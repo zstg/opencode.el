@@ -25,6 +25,7 @@
 ;;; Code:
 
 (require 'comint)
+(require 'markdown-mode)
 (require 'opencode-api)
 (require 'vtable)
 
@@ -37,7 +38,14 @@
 (define-derived-mode opencode-session-mode comint-mode "OpenCode"
   "Major mode for interacting with an opencode session."
   (setq-local comint-use-prompt-regexp nil
-              mode-line-process nil))
+              mode-line-process nil
+              comint-input-sender #'ignore
+              comint-highlight-input nil
+              left-margin-width (1+ left-margin-width))
+  (visual-line-mode)
+  (font-lock-mode -1)
+  (add-hook 'comint-preoutput-filter-functions 'opencode--render-markdown nil t)
+  (add-hook 'comint-input-filter-functions 'opencode--render-input-markdown nil t))
 
 (defun opencode-kill-session (session)
   "Kill SESSION."
@@ -67,6 +75,21 @@
     (overlay-put ov 'line-prefix margin)
     (overlay-put ov 'wrap-prefix margin)))
 
+(defun opencode--render-markdown (string)
+  "Render STRING in gfm-view-mode."
+  (with-temp-buffer
+    (insert string)
+    (delay-mode-hooks (gfm-view-mode))
+    (font-lock-ensure)
+    (buffer-string)))
+
+(defun opencode--render-input-markdown (input)
+  "Rerender comint INPUT as markdown."
+  (let ((inhibit-read-only t))
+    (delete-region (process-mark (get-buffer-process (current-buffer)))
+                   (point))
+    (insert (opencode--render-markdown input))))
+
 (defun opencode--replay-user-request (message)
   "Replay a user request MESSAGE."
   (let ((beginning (point)))
@@ -91,11 +114,7 @@
       (if (get-buffer buffer-name)
           (pop-to-buffer buffer-name)
         (with-current-buffer (get-buffer-create buffer-name)
-          (comint-mode)
-          (visual-line-mode)
-          (setq left-margin-width (1+ left-margin-width))
-          (setq-local comint-input-sender #'ignore
-                      comint-highlight-input nil)
+          (opencode-session-mode)
           (let ((proc (start-process buffer-name buffer-name nil)))
             (set-process-query-on-exit-flag proc nil)
             (opencode-api-session-messages (.id)
