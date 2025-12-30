@@ -87,14 +87,21 @@ With a prefix argument, prompt for HOST and PORT."
   "Get the dummy PTY process associated with this opencode buffer."
   (get-buffer-process (current-buffer)))
 
+(defvar opencode-event-log-max-lines 5000
+  "Maximum number of lines to log in the opencode event log buffer.")
+
 (defun opencode--log-event (type event)
   "Log EVENT of TYPE to the opencode log buffer."
-  (with-current-buffer (get-buffer-create "*opencode-log*")
-    (goto-char (point-max))
-    (insert (format "[%s] %s: %s\n"
-                    (format-time-string "%Y-%m-%d %H:%M:%S")
-                    type
-                    event))))
+  (with-current-buffer (get-buffer-create "*opencode-event-log*")
+    (save-excursion
+      (goto-char (point-max))
+      (insert (format "[%s] %s: %s\n"
+                      (format-time-string "%Y-%m-%d %H:%M:%S")
+                      type
+                      event))
+      (when (> (line-number-at-pos) opencode-event-log-max-lines)
+        (goto-char (point-min))
+        (delete-line)))))
 
 (defun opencode--close-process (&optional event)
   "Handle shutdown of opencode server, logging EVENT."
