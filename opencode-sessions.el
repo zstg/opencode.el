@@ -167,7 +167,7 @@
     (overlay-put ov 'wrap-prefix margin)))
 
 (defun opencode--render-markdown (string)
-  "Render STRING in gfm-view-mode."
+  "Render STRING in `gfm-view-mode'."
   (with-temp-buffer
     (insert string)
     (delay-mode-hooks (gfm-view-mode))

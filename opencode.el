@@ -49,11 +49,6 @@
   :type 'integer
   :group 'opencode)
 
-(defcustom opencode-mode-hook nil
-  "Hook run after `opencode-mode' is entered."
-  :type 'hook
-  :group 'opencode)
-
 (defvar opencode--plz-event-request nil
   "Request process streaming events from /event on opencode server.")
 
