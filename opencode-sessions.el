@@ -113,7 +113,11 @@
     (cl-case type
       (reasoning (opencode--insert-reasoning-block
                   text))
-      (text (comint-output-filter process (concat text "\n"))))))
+      (text (comint-output-filter process (if (looking-back "\n\n" (- 2 (point)))
+                                              (concat text "\n")
+                                            (concat "\n" text "\n")))
+            (let ((ov (make-overlay (point-max) (point-max))))
+              (overlay-put ov 'before-string (opencode--margin 'opencode-request-margin-highlight)))))))
 
 (defun opencode-session--update-part (part delta)
   "Display PART, partial message output. DELTA is new text since last update."
@@ -148,13 +152,17 @@
   "OpenCode margin face to apply to reasoning blocks."
   :group 'opencode)
 
+(defun opencode--margin (face)
+  "Return margin string for FACE."
+  (propertize ">" 'display
+              `((margin left-margin)
+                ,(propertize "▎" 'face
+                             face))))
+
 (defun opencode--add-margin (start end face)
   "Display margin from START (inclusive) to END (exclusive) with FACE."
   (let ((ov (make-overlay start (1- end)))
-        (margin (propertize ">" 'display
-                            `((margin left-margin)
-                              ,(propertize "▎" 'face
-                                           face)))))
+        (margin (opencode--margin face)))
     (overlay-put ov 'line-prefix margin)
     (overlay-put ov 'wrap-prefix margin)))
 
