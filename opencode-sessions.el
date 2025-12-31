@@ -105,19 +105,27 @@
 
 (defun opencode--render-last-block (type start process)
   "Render block of TYPE (reasoning or text) since START with PROCESS."
-  (let* ((end (process-mark process))
-         (inhibit-read-only t)
-         (text (opencode--render-markdown
-                (concat (buffer-substring start end) "\n"))))
-    (delete-region start end)
-    (cl-case type
-      (reasoning (opencode--insert-reasoning-block
-                  text))
-      (text (comint-output-filter process (if (looking-back "\n\n" (- 2 (point)))
-                                              (concat text "\n")
-                                            (concat "\n" text "\n")))
-            (let ((ov (make-overlay (point-max) (point-max))))
-              (overlay-put ov 'before-string (opencode--margin 'opencode-request-margin-highlight)))))))
+  (when (seq-contains-p '(reasoning text) type)
+    (let* ((end (process-mark process))
+           (inhibit-read-only t)
+           (text (opencode--render-markdown (buffer-substring start end))))
+      (delete-region start end)
+      (cl-case type
+        (reasoning (opencode--insert-reasoning-block text))
+        (text (comint-output-filter process text))))))
+
+(defun opencode--maybe-insert-block-spacing ()
+  "Ensure \n\n before block."
+  (let* ((process (get-buffer-process (current-buffer)))
+         (pos (marker-position (process-mark process))))
+    (comint-output-filter
+     process
+     (cond
+      ((not (eq ?\n (char-before pos))) "\n\n")
+      ((and (eq ?\n (char-before pos))
+            (not (eq ?\n (char-before (1- pos)))))
+       "\n")
+      (t "")))))
 
 (defun opencode-session--update-part (part delta)
   "Display PART, partial message output. DELTA is new text since last update."
@@ -126,21 +134,32 @@
                (process (get-buffer-process buffer))
                (message-parts (assoc-string .messageID opencode-assistant-messages)))
       (with-current-buffer buffer
-        (pcase .type
-          ("step-start" (setf (cdr message-parts) (cons 'reasoning
-                                                        (marker-position (process-mark process)))))
-          ("reasoning" (opencode--insert-reasoning-block delta))
-          ("text"
-           (pcase (cdr message-parts)
-             (`(reasoning . ,start)
-              (opencode--render-last-block 'reasoning start process)
-              (setf (cdr message-parts) (cons 'text
-                                              (marker-position
-                                               (process-mark
-                                                process))))))
-           (comint-output-filter process delta))
-          ("step-finish"
-           (opencode--render-last-block (cadr message-parts) (cddr message-parts) process)))))))
+        (let ((last-type (cadr message-parts))
+              (last-start (cddr message-parts)))
+          (cl-flet ((maybe-render-last-and-update-message-parts
+                      (type)
+                      (unless (eq type last-type)
+                        (when last-start
+                          (opencode--render-last-block last-type last-start process)
+                          (opencode--maybe-insert-block-spacing))
+                        (setf (cdr message-parts) (cons type
+                                                        (marker-position (process-mark process)))))))
+            (pcase .type
+              ((and "reasoning" (guard delta))
+               (maybe-render-last-and-update-message-parts 'reasoning)
+               (opencode--insert-reasoning-block delta))
+              ((and "text" (guard delta))
+               (maybe-render-last-and-update-message-parts 'text)
+               (comint-output-filter process delta))
+              ("tool" (maybe-render-last-and-update-message-parts 'tool)
+               (when (string-equal .state.status "running")
+                 (opencode--insert-tool-block .tool .state.input)))
+              ("step-finish"
+               (when (string-equal "stop" .reason)
+                 (opencode--render-last-block last-type last-start process)
+                 (opencode--maybe-insert-block-spacing)
+                 (let ((ov (make-overlay (point-max) (point-max))))
+                   (overlay-put ov 'before-string (opencode--margin 'opencode-request-margin-highlight))))))))))))
 
 (defface opencode-request-margin-highlight
   '((t :inherit outline-1 :height reset))
@@ -150,6 +169,11 @@
 (defface opencode-reasoning-margin-highlight
   '((t :inherit outline-2 :height reset))
   "OpenCode margin face to apply to reasoning blocks."
+  :group 'opencode)
+
+(defface opencode-tool-margin-highlight
+  '((t :inherit outline-5 :height reset))
+  "OpenCode margin face to apply to tool call blocks."
   :group 'opencode)
 
 (defun opencode--margin (face)
@@ -191,11 +215,42 @@
   (let ((comint-input-sender #'opencode--highlight-input))
     (comint-send-input)))
 
+(defun opencode--format-tool-call (tool input)
+  "Format TOOL call with INPUT arguments for display."
+  (pcase input
+    ;; Single argument: tool-name arg-value
+    (`((,_ . ,value))
+     (format "%s %s\n\n" tool value))
+    ;; grep with pattern + include/path
+    ((and (guard (string= tool "grep"))
+          (or (map ('pattern pattern) ('include location))
+              (map ('pattern pattern) ('path location))))
+     (format "grep \"%s\" in %s\n\n" pattern location))
+    ;; Multiple arguments: tool-name, then arg-name: value per line
+    (_
+     (concat tool "\n"
+             (mapconcat (lambda (pair)
+                          (format "  %s: %s" (car pair) (cdr pair)))
+                        input
+                        "\n")
+             "\n"))))
+
+(defun opencode--insert-block-with-margin (text face)
+  "Insert TEXT with FACE margin highlight."
+  (let* ((process (get-buffer-process (current-buffer)))
+         (beginning (marker-position (process-mark process))))
+    (comint-output-filter (get-buffer-process (current-buffer)) text)
+    (opencode--add-margin beginning (process-mark process) face)))
+
 (defun opencode--insert-reasoning-block (text)
   "Insert TEXT as reasoning block."
-  (let ((beginning (point)))
-    (comint-output-filter (get-buffer-process (current-buffer)) text)
-    (opencode--add-margin beginning (point) 'opencode-reasoning-margin-highlight)))
+  (opencode--insert-block-with-margin text 'opencode-reasoning-margin-highlight))
+
+(defun opencode--insert-tool-block (tool input)
+  "Insert TOOL call with INPUT as margin-highlighted block."
+  (opencode--insert-block-with-margin
+   (opencode--format-tool-call tool input)
+   'opencode-tool-margin-highlight))
 
 (defun opencode-open-session (session)
   "Open comint based shell for SESSION."
