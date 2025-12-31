@@ -42,6 +42,14 @@
 (defvar-local opencode-session-id nil
   "Session id for the current opencode session buffer.")
 
+(defvar opencode-session-buffers
+  (make-hash-table :test 'equal)
+  "A mapping of session ids to Emacs buffers.")
+
+(defvar opencode-assistant-messages
+  nil
+  "An alist mapping all currently updating assistant message ids, to start pos.")
+
 (define-derived-mode opencode-session-mode comint-mode "OpenCode"
   "Major mode for interacting with an opencode session."
   (setq-local comint-use-prompt-regexp nil
@@ -51,7 +59,7 @@
               left-margin-width (1+ left-margin-width))
   (visual-line-mode)
   (font-lock-mode -1)
-  (add-hook 'comint-preoutput-filter-functions 'opencode--render-markdown nil t)
+  ;; (add-hook 'comint-preoutput-filter-functions 'opencode--render-markdown nil t)
   (add-hook 'comint-input-filter-functions 'opencode--render-input-markdown nil t))
 
 (defun opencode-yank-code-block ()
@@ -86,6 +94,27 @@
         (model (providerID . opencode) (modelID . grok-code))
         (parts ((type . text) (text . ,string))))
       _result))
+
+(defun opencode-session--message-updated (info)
+  "Handle message.updated event with INFO."
+  (let-alist info
+    (pcase .role
+      ("assistant" (if .finish
+                       (setf opencode-assistant-messages
+                             (assoc-delete-all .id opencode-assistant-messages))
+                     (push (cons .id nil) opencode-assistant-messages))))))
+
+(defun opencode-session--update-part (part delta)
+  "Display PART, partial message output. DELTA is new text since last update."
+  (let-alist part
+    (when-let ((buffer (gethash .sessionID opencode-session-buffers))
+               (process (get-buffer-process buffer))
+               (message-parts (assoc-string .messageID opencode-assistant-messages)))
+      (with-current-buffer buffer
+        (pcase .type
+          ("text" (comint-output-filter process delta))
+          ("step-start" (setf (cdr message-parts) (marker-position (process-mark process))))
+          ("step-finish" (comint-output-filter process "\n")))))))
 
 (defface opencode-request-margin-highlight
   '((t :inherit outline-1 :height reset))
@@ -147,6 +176,7 @@
         (with-current-buffer (get-buffer-create buffer-name)
           (opencode-session-mode)
           (setq opencode-session-id .id)
+          (puthash .id buffer-name opencode-session-buffers)
           (let ((proc (start-process buffer-name buffer-name nil)))
             (set-process-query-on-exit-flag proc nil)
             (opencode-api-session-messages (.id)

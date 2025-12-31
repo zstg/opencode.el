@@ -120,6 +120,8 @@ With a prefix argument, prompt for HOST and PORT."
                                                 (message . ,(alist-get 'title session))
                                                 (variant . "success")
                                                 (timeout . 1000)))))
+        (message.part.updated (opencode-session--update-part .part .delta))
+        (message.updated (opencode-session--message-updated .info))
         (otherwise (opencode--log-event "WARNING" "unhandled message type"))))))
 
 (defun opencode--disconnect (&optional event)
