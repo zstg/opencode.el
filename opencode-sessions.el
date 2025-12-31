@@ -84,10 +84,10 @@
                         comint-last-input-end
                         'opencode-request-margin-highlight))
 
-(defun opencode--send-input (_proc string)
-  "Send STRING as input to current opencode session."
-  (insert "\n")
+(defun opencode--send-input (proc string)
+  "Send STRING as input to current opencode session using PROC."
   (opencode--highlight-input)
+  (comint-output-filter proc "\n")
   (opencode-api-send-message (opencode-session-id)
       `((agent . Planner-Sisyphus)
         (model (providerID . opencode) (modelID . grok-code))
@@ -103,6 +103,18 @@
                              (assoc-delete-all .id opencode-assistant-messages))
                      (push (cons .id nil) opencode-assistant-messages))))))
 
+(defun opencode--render-last-block (type start process)
+  "Render block of TYPE (reasoning or text) since START with PROCESS."
+  (let* ((end (process-mark process))
+         (inhibit-read-only t)
+         (text (opencode--render-markdown
+                (concat (buffer-substring start end) "\n"))))
+    (delete-region start end)
+    (cl-case type
+      (reasoning (opencode--insert-reasoning-block
+                  text))
+      (text (comint-output-filter process (concat text "\n"))))))
+
 (defun opencode-session--update-part (part delta)
   "Display PART, partial message output. DELTA is new text since last update."
   (let-alist part
@@ -111,15 +123,20 @@
                (message-parts (assoc-string .messageID opencode-assistant-messages)))
       (with-current-buffer buffer
         (pcase .type
-          ("text" (comint-output-filter process delta))
-          ("step-start" (setf (cdr message-parts) (marker-position (process-mark process))))
+          ("step-start" (setf (cdr message-parts) (cons 'reasoning
+                                                        (marker-position (process-mark process)))))
+          ("reasoning" (opencode--insert-reasoning-block delta))
+          ("text"
+           (pcase (cdr message-parts)
+             (`(reasoning . ,start)
+              (opencode--render-last-block 'reasoning start process)
+              (setf (cdr message-parts) (cons 'text
+                                              (marker-position
+                                               (process-mark
+                                                process))))))
+           (comint-output-filter process delta))
           ("step-finish"
-           (let* ((start (cdr message-parts))
-                  (end (process-mark process))
-                  (text (buffer-substring start end))
-                  (inhibit-read-only t))
-             (delete-region start end)
-             (comint-output-filter process (opencode--render-markdown (concat text "\n"))))))))))
+           (opencode--render-last-block (cadr message-parts) (cddr message-parts) process)))))))
 
 (defface opencode-request-margin-highlight
   '((t :inherit outline-1 :height reset))
