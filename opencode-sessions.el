@@ -114,7 +114,13 @@
         (pcase .type
           ("text" (comint-output-filter process delta))
           ("step-start" (setf (cdr message-parts) (marker-position (process-mark process))))
-          ("step-finish" (comint-output-filter process "\n")))))))
+          ("step-finish"
+           (let* ((start (cdr message-parts))
+                  (end (process-mark process))
+                  (text (buffer-substring start end))
+                  (inhibit-read-only t))
+             (delete-region start end)
+             (comint-output-filter process (opencode--render-markdown (concat text "\n"))))))))))
 
 (defface opencode-request-margin-highlight
   '((t :inherit outline-1 :height reset))
