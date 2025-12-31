@@ -127,6 +127,11 @@
        "\n")
       (t "")))))
 
+(defun opencode--highlight-prompt ()
+  "Highlight the prompt after displaying output."
+  (let ((ov (make-overlay (point-max) (point-max))))
+    (overlay-put ov 'before-string (opencode--margin 'opencode-request-margin-highlight))))
+
 (defun opencode-session--update-part (part delta)
   "Display PART, partial message output. DELTA is new text since last update."
   (let-alist part
@@ -158,8 +163,7 @@
                (when (string-equal "stop" .reason)
                  (opencode--render-last-block last-type last-start process)
                  (opencode--maybe-insert-block-spacing)
-                 (let ((ov (make-overlay (point-max) (point-max))))
-                   (overlay-put ov 'before-string (opencode--margin 'opencode-request-margin-highlight))))))))))))
+                 (opencode--highlight-prompt))))))))))
 
 (defface opencode-request-margin-highlight
   '((t :inherit outline-1 :height reset))
@@ -276,7 +280,10 @@
                                        (pcase .type
                                          ("text" (comint-output-filter proc text))
                                          ("tool" (opencode--insert-tool-block .tool .state.input))
-                                         ("reasoning" (opencode--insert-reasoning-block text))))))))))))
+                                         ("reasoning"
+                                          (opencode--insert-reasoning-block
+                                           text))))))))))
+              (opencode--highlight-prompt)))
           (pop-to-buffer buffer-name))))))
 
 (defun opencode-sessions-redisplay ()
