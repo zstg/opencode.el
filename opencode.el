@@ -72,21 +72,23 @@ With a prefix argument, prompt for HOST and PORT."
   (opencode-sessions-redisplay)
   (pop-to-buffer opencode-sessions-buffer))
 
-(defvar opencode-event-log-max-lines 5000
-  "Maximum number of lines to log in the opencode event log buffer.")
+(defvar opencode-event-log-max-lines nil
+  "Maximum number of lines to log in the opencode event log buffer.
+Or nil to disable logging.")
 
 (defun opencode--log-event (type event)
   "Log EVENT of TYPE to the opencode log buffer."
-  (with-current-buffer (get-buffer-create "*opencode-event-log*")
-    (save-excursion
-      (goto-char (point-max))
-      (insert (format "[%s] %s: %s\n"
-                      (format-time-string "%Y-%m-%d %H:%M:%S")
-                      type
-                      event))
-      (when (> (line-number-at-pos) opencode-event-log-max-lines)
-        (goto-char (point-min))
-        (delete-line)))))
+  (when opencode-event-log-max-lines
+    (with-current-buffer (get-buffer-create "*opencode-event-log*")
+     (save-excursion
+       (goto-char (point-max))
+       (insert (format "[%s] %s: %s\n"
+                       (format-time-string "%Y-%m-%d %H:%M:%S")
+                       type
+                       event))
+       (when (> (line-number-at-pos) opencode-event-log-max-lines)
+         (goto-char (point-min))
+         (delete-line))))))
 
 (defun opencode--toast-show (properties)
   "Show toast notification with PROPERTIES from opencode."
