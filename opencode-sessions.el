@@ -275,6 +275,7 @@
                                      (let ((text (opencode--render-markdown (concat .text "\n\n"))))
                                        (pcase .type
                                          ("text" (comint-output-filter proc text))
+                                         ("tool" (opencode--insert-tool-block .tool .state.input))
                                          ("reasoning" (opencode--insert-reasoning-block text))))))))))))
           (pop-to-buffer buffer-name))))))
 
