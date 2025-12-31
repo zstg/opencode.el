@@ -59,7 +59,6 @@
               left-margin-width (1+ left-margin-width))
   (visual-line-mode)
   (font-lock-mode -1)
-  ;; (add-hook 'comint-preoutput-filter-functions 'opencode--render-markdown nil t)
   (add-hook 'comint-input-filter-functions 'opencode--render-input-markdown nil t))
 
 (defun opencode-yank-code-block ()
@@ -193,7 +192,7 @@
                     ("user" (opencode--replay-user-request message))
                     ("assistant" (dolist (part (alist-get 'parts message))
                                    (let-alist part
-                                     (let ((text (concat .text "\n\n")))
+                                     (let ((text (opencode--render-markdown (concat .text "\n\n"))))
                                        (pcase .type
                                          ("text" (comint-output-filter proc text))
                                          ("reasoning" (opencode--insert-reasoning-block text))))))))))))
