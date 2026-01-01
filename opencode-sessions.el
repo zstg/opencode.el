@@ -170,6 +170,21 @@
   "Output STRING as comint output."
   (comint-output-filter (get-buffer-process (current-buffer)) string))
 
+(defun opencode-insert-logo ()
+  "Insert the opencode logo."
+  (let ((logo-left '("                   " "█▀▀█ █▀▀█ █▀▀█ █▀▀▄"
+                     "█░░█ █░░█ █▀▀▀ █░░█" "▀▀▀▀ █▀▀▀ ▀▀▀▀ ▀  ▀"))
+        (logo-right '("             ▄     " "█▀▀▀ █▀▀█ █▀▀█ █▀▀█"
+                      "█░░░ █░░█ █░░█ █▀▀▀" "▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀")))
+    (cl-loop for line in logo-left
+             for index from 0
+             do
+             (opencode--output (propertize line 'face 'shadow))
+             (opencode--output " ")
+             (opencode--output (propertize (nth index logo-right) 'face 'bold))
+             (opencode--output "\n"))
+    (opencode--output "\n")))
+
 (defun opencode--show-prompt ()
   "Highlight the prompt after displaying output."
   (opencode--output (propertize "> " 'invisible t))
@@ -394,6 +409,7 @@
           (puthash .id buffer opencode-session-buffers)
           (let ((proc (start-process "dummy" buffer nil)))
             (set-process-query-on-exit-flag proc nil)
+            (opencode-insert-logo)
             (opencode-api-session-messages (.id)
                 messages
               (dolist (message messages)
