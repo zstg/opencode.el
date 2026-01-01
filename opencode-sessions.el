@@ -270,32 +270,36 @@
 
 (defun opencode--format-tool-call (tool input)
   "Format TOOL call with INPUT arguments for display."
-  (pcase (cons tool input)
-    ;; Edit tool with oldString/newString: generate diff
-    (`("edit" . ,(map ('oldString old-string) ('newString new-string) ('filePath path)))
-     (concat "edit " (file-relative-name path opencode-session-directory) ":\n"
-             (opencode--format-edit-diff old-string new-string)
-             "\n"))
-    ;; grep with pattern + include/path
-    (`("grep" . ,(or (map ('pattern pattern) ('include location))
-                     (map ('pattern pattern) ('path location))))
-     (format "grep \"%s\" in %s\n\n" pattern location))
-    (`("todowrite" . ((todos . ,todos)))
-     (concat (opencode--render-todos todos) "\n\n"))
-    ;; Single argument where arg is filePath
-    (`(,_ . ((filePath . ,path)))
-     (format "%s %s\n\n" tool (file-relative-name path opencode-session-directory)))
-    ;; Single argument: tool-name arg-value
-    (`(,_ . ((,_ . ,value)))
-     (format "%s %s\n\n" tool value))
-    ;; Multiple arguments: tool-name, then arg-name: value per line
-    (_
-     (concat tool "\n"
-             (mapconcat (lambda (pair)
-                          (format "  %s: %s" (car pair) (cdr pair)))
-                        input
-                        "\n")
-             "\n"))))
+  (let-alist input
+    (when .filePath
+      (setf .filePath (file-relative-name .filePath opencode-session-directory)))
+    (pcase tool
+      ("edit"
+       (concat "edit " .filePath ":\n"
+               (opencode--format-edit-diff .oldString .newString)
+               "\n"))
+      ("read"
+       (if (and .offset .limit)
+           (format "read %s [offset=%d, limit=%d]\n\n"
+                   .filePath .offset .limit)
+         (format "read %s\n\n" .filePath)))
+      ("grep"
+       (format "grep \"%s\" in %s\n\n" .pattern (or .include .path)))
+      ("bash"
+       (format "# %s\n$ %s\n\n"
+               .description
+               .command))
+      ("todowrite"
+       (concat (opencode--render-todos .todos) "\n\n"))
+      (_ (if (= 1 (length input))
+             (format "%s %s\n\n" tool (cdar input))
+           ;; Multiple arguments: tool-name, then arg-name: value per line
+           (concat tool "\n"
+                   (mapconcat (lambda (pair)
+                                (format "  %s: %s" (car pair) (cdr pair)))
+                              input
+                              "\n")
+                   "\n\n"))))))
 
 (defun opencode--insert-block-with-margin (text face)
   "Insert TEXT with FACE margin highlight."
@@ -405,7 +409,8 @@
                                                                         1000))))))
                          :separator-width 3
                          :keymap (define-keymap
-                                   "r" 'opencode-sessions-redisplay))
+                                   "r" 'opencode-sessions-redisplay
+                                   "g" nil))
           (insert "No sessions"))
         (goto-char point)))))
 
