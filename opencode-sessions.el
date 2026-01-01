@@ -47,6 +47,9 @@
 (defvar-local opencode-session-directory nil
   "Directory for the current opencode session buffer.")
 
+(defvar-local opencode-session-status "idle"
+  "Status of the current opencode session (busy or idle).")
+
 (defvar opencode-session-buffers
   (make-hash-table :test 'equal)
   "A mapping of session ids to Emacs buffers.")
@@ -55,10 +58,25 @@
   nil
   "An alist mapping all currently updating assistant message ids, to start pos.")
 
+(defun opencode--session-status-indicator ()
+  "Return mode line indicator for session status."
+  (pcase opencode-session-status
+    ("busy" "⏳  ")
+    ("idle" "🚀  ")
+    (_ "")))
+
+(defun opencode-session--set-status (session-id status)
+  "Set STATUS for the session with SESSION-ID and update modeline."
+  (when-let ((buffer (gethash session-id opencode-session-buffers)))
+    (when (buffer-live-p (get-buffer buffer))
+      (with-current-buffer buffer
+        (setq opencode-session-status status)
+        (force-mode-line-update)))))
+
 (define-derived-mode opencode-session-mode comint-mode "OpenCode"
   "Major mode for interacting with an opencode session."
   (setq-local comint-use-prompt-regexp nil
-              mode-line-process nil
+              mode-line-process '(:eval (opencode--session-status-indicator))
               comint-input-sender 'opencode--send-input
               comint-highlight-input nil
               left-margin-width (1+ left-margin-width))
