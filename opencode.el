@@ -74,7 +74,9 @@ With a prefix argument, prompt for HOST and PORT."
       (setq opencode-api-url (format "http://%s:%d" host port))
       (add-hook 'kill-buffer-hook #'opencode--disconnect nil t)
       (opencode-process-events)
-      (opencode--fetch-agents)))
+      (opencode--fetch-agents)
+      (opencode-api-configured-providers result
+        (setq opencode-providers (alist-get 'providers result)))))
   (opencode-sessions-redisplay)
   (pop-to-buffer opencode-sessions-buffer))
 
@@ -147,12 +149,10 @@ Or nil to disable logging.")
   "Fetch available agents from server and filter out subagents or hidden agents."
   (opencode-api-agents agents
     (setq opencode-agents
-          (mapcar (lambda (agent)
-                    (alist-get 'name agent))
-                  (seq-remove (lambda (agent)
-                                (or (string-equal "subagent" (alist-get 'mode agent))
-                                    (alist-get 'hidden agent)))
-                              agents)))))
+          (seq-remove (lambda (agent)
+                        (or (string-equal "subagent" (alist-get 'mode agent))
+                            (alist-get 'hidden agent)))
+                      agents))))
 
 (defun opencode-process-events ()
   "Connect to the opencode event stream and process all events."

@@ -73,7 +73,7 @@ and saving to CURRENT-BUFFER while running BODY."
                            ,@body)
                        ,@body)))
            :else (lambda (response)
-                   (let ((error-msg (format "error requesting %s: %s" ,path response)))
+                   (let ((error-msg (format "error requesting %s: %s" ,saved-path response)))
                      (when opencode-api-log-max-lines
                        (with-current-buffer
                            (get-buffer-create "*opencode-api-log*")

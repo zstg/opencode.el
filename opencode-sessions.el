@@ -87,14 +87,22 @@
 
 (defun opencode--session-status-indicator ()
   "Return mode line indicator for session status."
-  (format "[🤖 %s] %s  "
-          (pcase opencode-session-agent
-            ("Planner-Sisyphus" "Planner")
-            (_ opencode-session-agent))
-          (pcase opencode-session-status
-            ("busy" "⏳")
-            ("idle" "🚀")
-            (_ ""))))
+  (let-alist opencode-session-agent
+    (let ((agent (pcase .name
+                   ("Planner-Sisyphus" "Planner")
+                   (name name)))
+          (model (map-nested-elt
+                  (seq-find (lambda (provider)
+                              (string-equal .model.providerID (alist-get 'id provider)))
+                            opencode-providers)
+                  `(models ,(intern .model.modelID) name)))
+          (status (pcase opencode-session-status
+                    ("busy" "⏳")
+                    ("idle" "🚀")
+                    (_ ""))))
+      (if (< (window-width) 115)
+          (format "[🤖 %s] %s  " agent status)
+        (format "[🤖 %s - %s] %s  " agent model status)))))
 
 (defun opencode-session--set-status (session-id status)
   "Set STATUS for the session with SESSION-ID and update modeline."
@@ -142,8 +150,8 @@
   (opencode--highlight-input)
   (opencode--output "\n")
   (opencode-api-send-message (opencode-session-id)
-      `((agent . ,opencode-session-agent)
-        (model (providerID . opencode) (modelID . grok-code))
+      `((agent . ,(alist-get 'name opencode-session-agent))
+        ,(assoc 'model opencode-session-agent)
         (parts ((type . text) (text . ,string))))
       _result))
 

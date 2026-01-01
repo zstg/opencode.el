@@ -27,5 +27,8 @@
 (defvar opencode-agents nil
   "List of available primary agents (excluding sub-agents and hidden agents).")
 
+(defvar opencode-providers nil
+  "List of available providers and models.")
+
 (provide 'opencode-common)
 ;;; opencode-common.el ends here
