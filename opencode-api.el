@@ -49,12 +49,7 @@ and saving to CURRENT-BUFFER while running BODY."
                (when ,data
                  (insert "REQUEST BODY:")
                  (pp ,data (current-buffer)))
-               (let ((lines (line-number-at-pos)))
-                 (when (> lines opencode-api-log-max-lines)
-                   (save-excursion
-                     (goto-char (point-min))
-                     (delete-region (point)
-                                    (line-beginning-position (- lines opencode-api-log-max-lines)))))))))
+               (opencode--truncate-at-max-lines opencode-api-log-max-lines))))
          (plz ',method (concat opencode-api-url ,path)
            :as (lambda () (unless (string-empty-p (buffer-string))
                        (json-parse-buffer :array-type 'list

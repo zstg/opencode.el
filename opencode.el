@@ -80,6 +80,13 @@ With a prefix argument, prompt for HOST and PORT."
   "Maximum number of lines to log in the opencode event log buffer.
 Or nil to disable logging.")
 
+(defun opencode--truncate-at-max-lines (max-lines)
+  "Delete the first half of the buffer if we've reached MAX-LINES."
+  (when (> (line-number-at-pos) max-lines)
+    (goto-char (point-max))
+    (forward-line (- (/ max-lines 2)))
+    (delete-region (point-min) (point))))
+
 (defun opencode--log-event (type event)
   "Log EVENT of TYPE to the opencode log buffer."
   (when opencode-event-log-max-lines
@@ -90,9 +97,7 @@ Or nil to disable logging.")
                        (format-time-string "%Y-%m-%d %H:%M:%S")
                        type
                        event))
-       (when (> (line-number-at-pos) opencode-event-log-max-lines)
-         (goto-char (point-min))
-         (delete-line))))))
+       (opencode--truncate-at-max-lines opencode-event-log-max-lines)))))
 
 (defun opencode--toast-show (properties)
   "Show toast notification with PROPERTIES from opencode."
