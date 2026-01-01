@@ -39,6 +39,10 @@
   "Emacs interface to opencode."
   :group 'applications)
 
+(defgroup opencode-faces nil
+  "Faces for opencode interface."
+  :group 'opencode)
+
 (defcustom opencode-host "localhost"
   "Hostname for the opencode server."
   :type 'string

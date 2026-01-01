@@ -173,17 +173,17 @@
 (defface opencode-request-margin-highlight
   '((t :inherit outline-1 :height reset))
   "OpenCode margin face to apply to user requests."
-  :group 'opencode)
+  :group 'opencode-faces)
 
 (defface opencode-reasoning-margin-highlight
   '((t :inherit outline-2 :height reset))
   "OpenCode margin face to apply to reasoning blocks."
-  :group 'opencode)
+  :group 'opencode-faces)
 
 (defface opencode-tool-margin-highlight
   '((t :inherit outline-5 :height reset))
   "OpenCode margin face to apply to tool call blocks."
-  :group 'opencode)
+  :group 'opencode-faces)
 
 (defun opencode--margin (face)
   "Return margin string for FACE."
