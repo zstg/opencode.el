@@ -55,7 +55,8 @@
   (define-keymap
     "C-c C-y" 'opencode-yank-code-block
     "TAB" 'opencode-cycle-session-agent
-    "C-c r" 'opencode-rename-session))
+    "C-c r" 'opencode-rename-session
+    "C-c m" 'opencode-select-model))
 
 (defvar-local opencode-session-id nil
   "Session id for the current opencode session buffer.")
@@ -80,10 +81,51 @@
 (defun opencode-cycle-session-agent ()
   "Switch to the next agent in `opencode-agents'."
   (interactive)
-  (let* ((pos (cl-position opencode-session-agent opencode-agents :test 'equal))
+  (let* ((pos (cl-position-if (lambda (agent)
+                                (string-equal (alist-get 'name agent)
+                                              (alist-get 'name opencode-session-agent)))
+                              opencode-agents))
          (next (nth (1+ pos) opencode-agents)))
     (setf opencode-session-agent (or next (car opencode-agents))))
   (force-mode-line-update))
+
+(defun opencode--collect-all-models ()
+  "Collect all models from `opencode-providers' as a list.
+Each element is (display-name . (provider-id provider-name model-id))."
+  (let (result)
+    (dolist (provider opencode-providers)
+      (let-alist provider
+        (dolist (model-entry .models)
+          (let* ((model (cdr model-entry))
+                 (model-name (alist-get 'name model))
+                 (model-id (alist-get 'id model)))
+            (push (cons model-name (list .id .name model-id))
+                  result)))))
+    (nreverse result)))
+
+(defun opencode-select-model ()
+  "Select a model for the current session using completion.
+Creates a new copy of the agent to avoid mutating `opencode-agents'."
+  (interactive)
+  (unless opencode-session-agent
+    (error "not in a session"))
+  (let* ((all-models (opencode--collect-all-models))
+         (candidates (mapcar #'car all-models))
+         (completion-extra-properties
+          `(:annotation-function
+            ,(lambda (cand)
+               (let* ((info (alist-get cand all-models nil nil #'string-equal))
+                      (provider-name (cadr info)))
+                 (format "  [%s]" provider-name)))))
+         (selected (completing-read "Model: " candidates nil t)))
+    (when-let ((info (alist-get selected all-models nil nil #'string-equal)))
+      (setq opencode-session-agent (copy-alist opencode-session-agent))
+      (let* ((provider-id (car info))
+             (model-id (caddr info)))
+        (setf (alist-get 'model opencode-session-agent)
+              `((providerID . ,provider-id)
+                (modelID . ,model-id)))
+        (force-mode-line-update)))))
 
 (defun opencode--session-status-indicator ()
   "Return mode line indicator for session status."
