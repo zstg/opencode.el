@@ -31,6 +31,7 @@
 (require 'json)
 (require 'notifications)
 (require 'opencode-api)
+(require 'opencode-common)
 (require 'opencode-sessions)
 (require 'plz-media-type)
 (require 'plz-event-source)
@@ -55,9 +56,6 @@
 
 (defvar opencode--plz-event-request nil
   "Request process streaming events from /event on opencode server.")
-
-(defvar opencode-agents nil
-  "List of available primary agents (excluding sub-agents and hidden agents).")
 
 ;;;###autoload
 (defun opencode (&optional host port)

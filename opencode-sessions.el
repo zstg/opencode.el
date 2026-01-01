@@ -29,6 +29,7 @@
 (require 'diff-mode)
 (require 'markdown-mode)
 (require 'opencode-api)
+(require 'opencode-common)
 (require 'vtable)
 
 (defvar opencode-sessions-buffer nil
@@ -39,7 +40,8 @@
 
 (defvar opencode-session-mode-map
   (define-keymap
-    "C-c C-y" 'opencode-yank-code-block))
+    "C-c C-y" 'opencode-yank-code-block
+    "C-c TAB" 'opencode-cycle-session-agent))
 
 (defvar-local opencode-session-id nil
   "Session id for the current opencode session buffer.")
@@ -50,6 +52,9 @@
 (defvar-local opencode-session-status "idle"
   "Status of the current opencode session (busy or idle).")
 
+(defvar-local opencode-session-agent nil
+  "Currently active agent for this buffer's session.")
+
 (defvar opencode-session-buffers
   (make-hash-table :test 'equal)
   "A mapping of session ids to Emacs buffers.")
@@ -58,12 +63,24 @@
   nil
   "An alist mapping all currently updating assistant message ids, to start pos.")
 
+(defun opencode-cycle-session-agent ()
+  "Switch to the next agent in `opencode-agents'."
+  (interactive)
+  (let* ((pos (cl-position opencode-session-agent opencode-agents :test 'equal))
+         (next (nth (1+ pos) opencode-agents)))
+    (setf opencode-session-agent (or next (car opencode-agents))))
+  (force-mode-line-update))
+
 (defun opencode--session-status-indicator ()
   "Return mode line indicator for session status."
-  (pcase opencode-session-status
-    ("busy" "⏳  ")
-    ("idle" "🚀  ")
-    (_ "")))
+  (format "[🤖 %s] %s  "
+          (pcase opencode-session-agent
+            ("Planner-Sisyphus" "Planner")
+            (_ opencode-session-agent))
+          (pcase opencode-session-status
+            ("busy" "⏳")
+            ("idle" "🚀")
+            (_ ""))))
 
 (defun opencode-session--set-status (session-id status)
   "Set STATUS for the session with SESSION-ID and update modeline."
@@ -112,7 +129,7 @@
   (opencode--highlight-input)
   (opencode--output "\n")
   (opencode-api-send-message (opencode-session-id)
-      `((agent . Planner-Sisyphus)
+      `((agent . ,opencode-session-agent)
         (model (providerID . opencode) (modelID . grok-code))
         (parts ((type . text) (text . ,string))))
       _result))
@@ -371,7 +388,8 @@
         (with-current-buffer buffer
           (opencode-session-mode)
           (setq opencode-session-id .id
-                opencode-session-directory .directory)
+                opencode-session-directory .directory
+                opencode-session-agent (car opencode-agents))
           (puthash .id buffer opencode-session-buffers)
           (let ((proc (start-process "dummy" buffer nil)))
             (set-process-query-on-exit-flag proc nil)
