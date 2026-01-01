@@ -74,17 +74,19 @@ and saving to CURRENT-BUFFER while running BODY."
                        ,@body)))
            :else (lambda (response)
                    (let ((error-msg (format "error requesting %s: %s" ,path response)))
-                     (with-current-buffer
-                         (get-buffer-create "*opencode-api-log*")
-                       (save-excursion
-                         (goto-char (point-max))
-                         (insert "ERROR: " error-msg "\n")))
+                     (when opencode-api-log-max-lines
+                       (with-current-buffer
+                           (get-buffer-create "*opencode-api-log*")
+                         (save-excursion
+                           (goto-char (point-max))
+                           (insert "ERROR: " error-msg "\n"))))
                      (error error-msg)))))))
 
-  (cl-defun opencode-api--wrap (method path &key elisp-macro-name)
+  (cl-defun opencode-api--wrap (method path &key elisp-macro-name nodata)
     "Define a macro to wrap api call with METHOD and PATH.
 optionally provide ELISP-MACRO-NAME where opencode-api-elisp-macro-name will be
-the name of the created macro."
+the name of the created macro. Set NODATA to indicate a request doesn't have a
+body when it normally would (POST PATCH)."
     (let ((elisp-macro-name
            (intern
             (concat "opencode-api"
@@ -93,24 +95,26 @@ the name of the created macro."
                       (string-replace "/" "-" path))))))
       (eval
        (if (seq-contains-p path ?\%)
-           (if (eq method 'postdata)
+           (if (and (seq-contains-p '(post patch) method)
+                    (not nodata))
                `(defmacro ,elisp-macro-name
                     (args data return-var &rest body)
                   ,(format "Wrapper for opencode %s endpoint." path)
                   (declare (indent 3))
-                  (opencode-api--call 'post `(format ,,path ,@args) return-var body
+                  (opencode-api--call ',method `(format ,,path ,@args) return-var body
                                       :data data))
              `(defmacro ,elisp-macro-name
                   (args return-var &rest body)
                 ,(format "Wrapper for opencode %s endpoint." path)
                 (declare (indent 2))
                 (opencode-api--call ',method `(format ,,path ,@args) return-var body)))
-         (if (eq method 'postdata)
+         (if (and (seq-contains-p '(post patch) method)
+                  (not nodata))
              `(defmacro ,elisp-macro-name
                   (data return-var &rest body)
                 ,(format "Wrapper for opencode %s endpoint." path)
                 (declare (indent 2))
-                (opencode-api--call 'post ,path return-var body
+                (opencode-api--call ',method ,path return-var body
                                     :data data))
            `(defmacro ,elisp-macro-name
                 (return-var &rest body)
@@ -120,13 +124,19 @@ the name of the created macro."
 
   (defun opencode-api-define-wrapper (endpoint)
     "Create a macro wrapping ENDPOINT."
-    (let ((method 'get))
+    (let ((method 'get)
+          nodata)
       (when (and (listp endpoint)
-                 (seq-contains-p '(get post postdata delete) (car endpoint)))
-        (setf method (pop endpoint)))
+                 (seq-contains-p '(get patch post delete) (car endpoint)))
+        (setf method (pop endpoint))
+        (when (eq 'nodata (car endpoint))
+          (pop endpoint)
+          (setf nodata t)))
       (pcase endpoint
-        ((pred stringp) (opencode-api--wrap method endpoint))
-        (`(,elisp-name ,path) (opencode-api--wrap method path :elisp-macro-name elisp-name)))))
+        ((pred stringp) (opencode-api--wrap method endpoint :nodata nodata))
+        (`(,elisp-name ,path) (opencode-api--wrap method path
+                                                  :elisp-macro-name elisp-name
+                                                  :nodata nodata)))))
 
   (defun opencode-api-define-wrappers (api-endpoints)
     "Define wrapping macros for a list of API-ENDPOINTS."
@@ -148,12 +158,14 @@ the name of the created macro."
      (session-todos "/session/%s/todo")
      (session-diff "/session/%s/diff")
      (session-messages "/session/%s/message")
-     (postdata send-message "/session/%s/prompt_async")
+     (post sync-message "/session/%/message")
+     (post send-message "/session/%s/prompt_async")
      (message-details "/session/%s/message/%s")
      (sessions "/session")
      (sessions-status "/session/status")
-     (postdata create-session "/session")
-     (post abort-session "/session/%s/abort")
+     (post create-session "/session")
+     (patch rename-session "/session/%s")
+     (post nodata abort-session "/session/%s/abort")
      (delete delete-session "/session/%s")
      (commands "/command")
      "/file/status"
@@ -168,7 +180,7 @@ the name of the created macro."
      "/formatter"
      "/mcp"
      (agents "/agent")
-     (post dispose-instance "/instance/dispose"))))
+     (post nodata dispose-instance "/instance/dispose"))))
 
 (provide 'opencode-api)
 ;;; opencode-api.el ends here

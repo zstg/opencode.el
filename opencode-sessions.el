@@ -41,7 +41,8 @@
 (defvar opencode-session-mode-map
   (define-keymap
     "C-c C-y" 'opencode-yank-code-block
-    "C-c TAB" 'opencode-cycle-session-agent))
+    "C-c TAB" 'opencode-cycle-session-agent
+    "C-c r" 'opencode-rename-session))
 
 (defvar-local opencode-session-id nil
   "Session id for the current opencode session buffer.")
@@ -411,6 +412,20 @@
               (opencode--show-prompt)))
           (pop-to-buffer buffer))))))
 
+
+(defun opencode-rename-session (&optional session)
+  "Rename SESSION. If in a session buffer, rename that session."
+  (interactive)
+  (let ((title (read-string "Title: ")))
+    (opencode-api-rename-session ((or (alist-get 'id session)
+                                      opencode-session-id))
+        `((title . ,title))
+        _res
+      (if session
+          (opencode-sessions-redisplay)
+        (rename-buffer
+         (generate-new-buffer-name (format "*OpenCode: %s*" title)))))))
+
 (defun opencode-sessions-redisplay ()
   "Refresh the session display table."
   (interactive)
@@ -428,6 +443,7 @@
                                     "Created at")
                          :objects sessions
                          :actions '("x" opencode-kill-session
+                                    "R" opencode-rename-session
                                     "RET" opencode-open-session
                                     "o" opencode-open-session)
                          :getter (lambda (object column vtable)
