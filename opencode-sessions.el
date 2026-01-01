@@ -35,13 +35,26 @@
 (defvar opencode-sessions-buffer nil
   "Buffer of current opencode session.")
 
+(defvar opencode-session-control-mode-map
+  (define-keymap
+    "r" 'opencode-sessions-redisplay
+    "g" nil
+    "SPC" nil
+    "n" 'opencode-new-session))
+
+(with-eval-after-load 'evil
+  (declare-function evil-define-key "evil-core")
+  (evil-define-key 'normal opencode-session-control-mode-map
+    "r" 'opencode-sessions-redisplay
+    "n" 'opencode-new-session))
+
 (define-derived-mode opencode-session-control-mode special-mode "Sessions"
   "Opencode session control panel mode.")
 
 (defvar opencode-session-mode-map
   (define-keymap
     "C-c C-y" 'opencode-yank-code-block
-    "C-c TAB" 'opencode-cycle-session-agent
+    "TAB" 'opencode-cycle-session-agent
     "C-c r" 'opencode-rename-session))
 
 (defvar-local opencode-session-id nil
@@ -493,10 +506,7 @@ Without it will use a default title and then automatically generate one."
                                                                                               object))
                                                                         1000))))))
                          :separator-width 3
-                         :keymap (define-keymap
-                                   "r" 'opencode-sessions-redisplay
-                                   "g" nil
-                                   "n" 'opencode-new-session))
+                         :keymap opencode-session-control-mode-map)
           (insert "No sessions"))
         (goto-char point)))))
 
