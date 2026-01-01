@@ -345,6 +345,8 @@
        (format "# %s\n$ %s\n\n"
                .description
                .command))
+      ("websearch"
+       (format "websearch \"%s\"\n\n" .query))
       ("todowrite"
        (concat (opencode--render-todos .todos) "\n\n"))
       (_ (if (= 1 (length input))
