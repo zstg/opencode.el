@@ -252,26 +252,42 @@
               ;; Return the diff content
               (buffer-string))))))))
 
+(defun opencode--render-todos (todos)
+  "Render TODOS as markdown todo list."
+  (opencode--render-markdown
+   (mapconcat
+    (lambda (todo)
+      (let-alist todo
+        (format "- [%s] %s"
+                (pcase .status
+                  ((or "pending" "in_progress") " ")
+                  ("completed" "x")
+                  ("cancelled" "-")
+                  (_ " "))
+                .content)))
+    todos
+    "\n")))
+
 (defun opencode--format-tool-call (tool input)
   "Format TOOL call with INPUT arguments for display."
-  (pcase input
+  (pcase (cons tool input)
     ;; Edit tool with oldString/newString: generate diff
-    ((and (guard (string= tool "edit"))
-          (map ('oldString old-string) ('newString new-string) ('filePath path)))
+    (`("edit" . ,(map ('oldString old-string) ('newString new-string) ('filePath path)))
      (concat "edit " (file-relative-name path opencode-session-directory) ":\n"
              (opencode--format-edit-diff old-string new-string)
              "\n"))
+    ;; grep with pattern + include/path
+    (`("grep" . ,(or (map ('pattern pattern) ('include location))
+                     (map ('pattern pattern) ('path location))))
+     (format "grep \"%s\" in %s\n\n" pattern location))
+    (`("todowrite" . ((todos . ,todos)))
+     (concat (opencode--render-todos todos) "\n\n"))
     ;; Single argument where arg is filePath
-    (`((filePath . ,path))
+    (`(,_ . ((filePath . ,path)))
      (format "%s %s\n\n" tool (file-relative-name path opencode-session-directory)))
     ;; Single argument: tool-name arg-value
-    (`((,_ . ,value))
+    (`(,_ . ((,_ . ,value)))
      (format "%s %s\n\n" tool value))
-    ;; grep with pattern + include/path
-    ((and (guard (string= tool "grep"))
-          (or (map ('pattern pattern) ('include location))
-              (map ('pattern pattern) ('path location))))
-     (format "grep \"%s\" in %s\n\n" pattern location))
     ;; Multiple arguments: tool-name, then arg-name: value per line
     (_
      (concat tool "\n"
