@@ -89,10 +89,10 @@
                         comint-last-input-end
                         'opencode-request-margin-highlight))
 
-(defun opencode--send-input (proc string)
-  "Send STRING as input to current opencode session using PROC."
+(defun opencode--send-input (_proc string)
+  "Send STRING as input to current opencode session."
   (opencode--highlight-input)
-  (comint-output-filter proc "\n")
+  (opencode--output "\n")
   (opencode-api-send-message (opencode-session-id)
       `((agent . Planner-Sisyphus)
         (model (providerID . opencode) (modelID . grok-code))
@@ -108,23 +108,21 @@
                              (assoc-delete-all .id opencode-assistant-messages))
                      (push (cons .id nil) opencode-assistant-messages))))))
 
-(defun opencode--render-last-block (type start process)
+(defun opencode--render-last-block (type start)
   "Render block of TYPE (reasoning or text) since START with PROCESS."
   (when (seq-contains-p '(reasoning text) type)
-    (let* ((end (process-mark process))
+    (let* ((end (opencode--session-process-position))
            (inhibit-read-only t)
            (text (opencode--render-markdown (buffer-substring start end))))
       (delete-region start end)
       (cl-case type
         (reasoning (opencode--insert-reasoning-block text))
-        (text (comint-output-filter process text))))))
+        (text (opencode--output text))))))
 
 (defun opencode--maybe-insert-block-spacing ()
   "Ensure \n\n before block."
-  (let* ((process (get-buffer-process (current-buffer)))
-         (pos (marker-position (process-mark process))))
-    (comint-output-filter
-     process
+  (let ((pos (opencode--session-process-position)))
+    (opencode--output
      (cond
       ((not (eq ?\n (char-before pos))) "\n\n")
       ((and (eq ?\n (char-before pos))
@@ -132,10 +130,16 @@
        "\n")
       (t "")))))
 
-(defun opencode--highlight-prompt ()
+(defun opencode--output (string)
+  "Output STRING as comint output."
+  (comint-output-filter (get-buffer-process (current-buffer)) string))
+
+(defun opencode--show-prompt ()
   "Highlight the prompt after displaying output."
-  (let ((ov (make-overlay (point-max) (point-max))))
-    (overlay-put ov 'before-string (opencode--margin 'opencode-request-margin-highlight))))
+  (opencode--output (propertize "> " 'display ""))
+  (opencode--add-margin (car comint-last-prompt)
+                        (cdr comint-last-prompt)
+                        'opencode-request-margin-highlight))
 
 (defun opencode-session--update-part (part delta)
   "Display PART, partial message output. DELTA is new text since last update."
@@ -150,7 +154,7 @@
                       (type)
                       (unless (eq type last-type)
                         (when last-start
-                          (opencode--render-last-block last-type last-start process)
+                          (opencode--render-last-block last-type last-start)
                           (opencode--maybe-insert-block-spacing))
                         (setf (cdr message-parts) (cons type
                                                         (marker-position (process-mark process)))))))
@@ -160,15 +164,15 @@
                (opencode--insert-reasoning-block delta))
               ((and "text" (guard delta))
                (maybe-render-last-and-update-message-parts 'text)
-               (comint-output-filter process delta))
+               (opencode--output delta))
               ("tool" (maybe-render-last-and-update-message-parts 'tool)
                (when (string-equal .state.status "running")
                  (opencode--insert-tool-block .tool .state.input)))
               ("step-finish"
                (when (string-equal "stop" .reason)
-                 (opencode--render-last-block last-type last-start process)
+                 (opencode--render-last-block last-type last-start)
                  (opencode--maybe-insert-block-spacing)
-                 (opencode--highlight-prompt))))))))))
+                 (opencode--show-prompt))))))))))
 
 (defface opencode-request-margin-highlight
   '((t :inherit outline-1 :height reset))
@@ -216,6 +220,7 @@
 
 (defun opencode--replay-user-request (message)
   "Replay a user request MESSAGE."
+  (opencode--show-prompt)
   (dolist (part (alist-get 'parts message))
     (let-alist part
       (pcase .type
@@ -303,10 +308,9 @@
 
 (defun opencode--insert-block-with-margin (text face)
   "Insert TEXT with FACE margin highlight."
-  (let* ((process (get-buffer-process (current-buffer)))
-         (beginning (marker-position (process-mark process))))
-    (comint-output-filter (get-buffer-process (current-buffer)) text)
-    (opencode--add-margin beginning (process-mark process) face)))
+  (let ((beginning (opencode--session-process-position)))
+    (opencode--output text)
+    (opencode--add-margin beginning (opencode--session-process-position) face)))
 
 (defun opencode--insert-reasoning-block (text)
   "Insert TEXT as reasoning block."
@@ -363,12 +367,12 @@
                                    (let-alist part
                                      (let ((text (opencode--render-markdown (concat .text "\n\n"))))
                                        (pcase .type
-                                         ("text" (comint-output-filter proc text))
+                                         ("text" (opencode--output text))
                                          ("tool" (opencode--insert-tool-block .tool .state.input))
                                          ("reasoning"
                                           (opencode--insert-reasoning-block
                                            text))))))))))
-              (opencode--highlight-prompt)))
+              (opencode--show-prompt)))
           (pop-to-buffer buffer-name))))))
 
 (defun opencode-sessions-redisplay ()
