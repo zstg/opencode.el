@@ -172,7 +172,7 @@
 
 (defun opencode--show-prompt ()
   "Highlight the prompt after displaying output."
-  (opencode--output (propertize "> " 'display ""))
+  (opencode--output (propertize "> " 'invisible t))
   (opencode--add-margin (car comint-last-prompt)
                         (cdr comint-last-prompt)
                         'opencode-request-margin-highlight))
@@ -412,6 +412,17 @@
               (opencode--show-prompt)))
           (pop-to-buffer buffer))))))
 
+(defun opencode-new-session (&optional title)
+  "Create a new session. With a prefix argument it will ask for TITLE.
+Without it will use a default title and then automatically generate one."
+  (interactive
+   (list (when current-prefix-arg
+           (read-string "Title: "))))
+  (opencode-api-create-session (if title
+                                   `((title . ,title))
+                            (make-hash-table))
+      session
+    (opencode-open-session session)))
 
 (defun opencode-rename-session (&optional session)
   "Rename SESSION. If in a session buffer, rename that session."
@@ -466,7 +477,8 @@
                          :separator-width 3
                          :keymap (define-keymap
                                    "r" 'opencode-sessions-redisplay
-                                   "g" nil))
+                                   "g" nil
+                                   "n" 'opencode-new-session))
           (insert "No sessions"))
         (goto-char point)))))
 
