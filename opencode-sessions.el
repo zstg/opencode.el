@@ -25,6 +25,8 @@
 ;;; Code:
 
 (require 'comint)
+(require 'diff)
+(require 'diff-mode)
 (require 'markdown-mode)
 (require 'opencode-api)
 (require 'vtable)
@@ -41,6 +43,9 @@
 
 (defvar-local opencode-session-id nil
   "Session id for the current opencode session buffer.")
+
+(defvar-local opencode-session-directory nil
+  "Directory for the current opencode session buffer.")
 
 (defvar opencode-session-buffers
   (make-hash-table :test 'equal)
@@ -205,7 +210,7 @@
 (defun opencode--render-input-markdown (input)
   "Rerender comint INPUT as markdown."
   (let ((inhibit-read-only t))
-    (delete-region (process-mark (get-buffer-process (current-buffer)))
+    (delete-region (opencode--session-process-position)
                    (point))
     (insert (opencode--render-markdown input))))
 
@@ -219,9 +224,46 @@
   (let ((comint-input-sender #'opencode--highlight-input))
     (comint-send-input)))
 
+(defun opencode--format-edit-diff (old-string new-string)
+  "Generate diff output comparing OLD-STRING to NEW-STRING."
+  (with-temp-buffer
+    (let ((old-buf (current-buffer)))
+      (insert old-string)
+      (insert "\n")
+      (with-temp-buffer
+        (let ((new-buf (current-buffer)))
+          (insert new-string)
+          (insert "\n")
+          (with-temp-buffer
+            (let ((diff-buf (current-buffer))
+                  (inhibit-read-only t))
+              ;; Run diff synchronously into this temp buffer
+              (diff-no-select old-buf new-buf nil t diff-buf)
+              (delay-mode-hooks (diff-mode))
+              (font-lock-ensure)
+              ;; Delete first 3 lines (diff command, ---, +++)
+              (goto-char (point-min))
+              (forward-line 3)
+              (delete-region (point-min) (point))
+              ;; Delete last 2 lines (diff finished timestamp)
+              (goto-char (point-max))
+              (forward-line -2)
+              (delete-region (point) (point-max))
+              ;; Return the diff content
+              (buffer-string))))))))
+
 (defun opencode--format-tool-call (tool input)
   "Format TOOL call with INPUT arguments for display."
   (pcase input
+    ;; Edit tool with oldString/newString: generate diff
+    ((and (guard (string= tool "edit"))
+          (map ('oldString old-string) ('newString new-string) ('filePath path)))
+     (concat "edit " (file-relative-name path opencode-session-directory) ":\n"
+             (opencode--format-edit-diff old-string new-string)
+             "\n"))
+    ;; Single argument where arg is filePath
+    (`((filePath . ,path))
+     (format "%s %s\n\n" tool (file-relative-name path opencode-session-directory)))
     ;; Single argument: tool-name arg-value
     (`((,_ . ,value))
      (format "%s %s\n\n" tool value))
@@ -250,11 +292,33 @@
   "Insert TEXT as reasoning block."
   (opencode--insert-block-with-margin text 'opencode-reasoning-margin-highlight))
 
+(defun opencode--refine-diff-hunks (start)
+  "Refine all diff hunks between START and process marker."
+  (let ((inhibit-read-only t))
+    (save-excursion
+      (goto-char (opencode--session-process-position))
+      (condition-case nil
+          (while (>= (point) start)
+            (diff-refine-hunk)
+            (diff-hunk-prev))
+        (error nil)))))
+
+(defun opencode--session-process-position ()
+  "Return position of process marker."
+  (marker-position
+   (process-mark
+    (get-buffer-process
+     (current-buffer)))))
+
 (defun opencode--insert-tool-block (tool input)
   "Insert TOOL call with INPUT as margin-highlighted block."
-  (opencode--insert-block-with-margin
-   (opencode--format-tool-call tool input)
-   'opencode-tool-margin-highlight))
+  (let ((start (opencode--session-process-position)))
+    (opencode--insert-block-with-margin
+     (opencode--format-tool-call tool input)
+     'opencode-tool-margin-highlight)
+    ;; For edit tools, apply diff hunk refinement after insertion
+    (when (string= tool "edit")
+      (opencode--refine-diff-hunks start))))
 
 (defun opencode-open-session (session)
   "Open comint based shell for SESSION."
@@ -264,7 +328,8 @@
           (pop-to-buffer buffer-name)
         (with-current-buffer (get-buffer-create buffer-name)
           (opencode-session-mode)
-          (setq opencode-session-id .id)
+          (setq opencode-session-id .id
+                opencode-session-directory .directory)
           (puthash .id buffer-name opencode-session-buffers)
           (let ((proc (start-process buffer-name buffer-name nil)))
             (set-process-query-on-exit-flag proc nil)
