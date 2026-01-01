@@ -68,7 +68,7 @@
 (defun opencode-session--set-status (session-id status)
   "Set STATUS for the session with SESSION-ID and update modeline."
   (when-let ((buffer (gethash session-id opencode-session-buffers)))
-    (when (buffer-live-p (get-buffer buffer))
+    (when (buffer-live-p buffer)
       (with-current-buffer buffer
         (setq opencode-session-status status)
         (force-mode-line-update)))))
@@ -365,15 +365,15 @@
 (defun opencode-open-session (session)
   "Open comint based shell for SESSION."
   (let-alist session
-    (let ((buffer-name (format "*OpenCode: %s*" .title)))
-      (if (get-buffer buffer-name)
-          (pop-to-buffer buffer-name)
-        (with-current-buffer (get-buffer-create buffer-name)
+    (if (buffer-live-p (gethash .id opencode-session-buffers))
+        (pop-to-buffer (gethash .id opencode-session-buffers))
+      (let ((buffer (generate-new-buffer (format "*OpenCode: %s*" .title))))
+        (with-current-buffer buffer
           (opencode-session-mode)
           (setq opencode-session-id .id
                 opencode-session-directory .directory)
-          (puthash .id buffer-name opencode-session-buffers)
-          (let ((proc (start-process buffer-name buffer-name nil)))
+          (puthash .id buffer opencode-session-buffers)
+          (let ((proc (start-process "dummy" buffer nil)))
             (set-process-query-on-exit-flag proc nil)
             (opencode-api-session-messages (.id)
                 messages
@@ -391,7 +391,7 @@
                                           (opencode--insert-reasoning-block
                                            text))))))))))
               (opencode--show-prompt)))
-          (pop-to-buffer buffer-name))))))
+          (pop-to-buffer buffer))))))
 
 (defun opencode-sessions-redisplay ()
   "Refresh the session display table."

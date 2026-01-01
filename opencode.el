@@ -122,7 +122,7 @@ Or nil to disable logging.")
         (tui.toast.show (opencode--toast-show (alist-get 'properties data)))
         (session.idle (opencode-api-session (.sessionID)
                           session
-                        (let ((buffer (get-buffer (gethash .sessionID opencode-session-buffers))))
+                        (let ((buffer (gethash .sessionID opencode-session-buffers)))
                           (unless (and (eq buffer (window-buffer (selected-window)))
                                        (frame-focus-state (window-frame (selected-window))))
                             (opencode--toast-show `((title . "OpenCode Finished")
