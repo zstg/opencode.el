@@ -39,24 +39,26 @@ Or nil (default) to turn off logging.")
     "Generate the body of an opencode api wrapper macro.
 Using METHOD, for endpoint PATH, saving result in RETURN-VAR,
 and saving to CURRENT-BUFFER while running BODY."
-    (cl-with-gensyms (current-buffer result)
-      `(let ((,current-buffer (current-buffer)))
+    (cl-with-gensyms (current-buffer result saved-path saved-data)
+      `(let ((,current-buffer (current-buffer))
+             (,saved-path ,path)
+             (,saved-data ,data))
          (when opencode-api-log-max-lines
            (with-current-buffer (get-buffer-create "*opencode-api-log*")
              (save-excursion
                (goto-char (point-max))
-               (insert "REQUEST: " ,path "\n")
-               (when ,data
+               (insert "REQUEST: " ,saved-path "\n")
+               (when ,saved-data
                  (insert "REQUEST BODY:")
-                 (pp ,data (current-buffer)))
+                 (pp ,saved-data (current-buffer)))
                (opencode--truncate-at-max-lines opencode-api-log-max-lines))))
-         (plz ',method (concat opencode-api-url ,path)
+         (plz ',method (concat opencode-api-url ,saved-path)
            :as (lambda () (unless (string-empty-p (buffer-string))
                        (json-parse-buffer :array-type 'list
                                           :object-type 'alist)))
            ,@(when data
                `(:headers '(("Content-Type" . "application/json"))
-                 :body (json-encode ,data)))
+                 :body (json-encode ,saved-data)))
            :then (lambda (,result)
                    (when opencode-api-log-max-lines
                      (with-current-buffer

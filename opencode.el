@@ -56,6 +56,9 @@
 (defvar opencode--plz-event-request nil
   "Request process streaming events from /event on opencode server.")
 
+(defvar opencode-agents nil
+  "List of available primary agents (excluding sub-agents and hidden agents).")
+
 ;;;###autoload
 (defun opencode (&optional host port)
   "Connect to opencode server, or open buffer to existing connection.
@@ -72,7 +75,8 @@ With a prefix argument, prompt for HOST and PORT."
       (opencode-session-control-mode)
       (setq opencode-api-url (format "http://%s:%d" host port))
       (add-hook 'kill-buffer-hook #'opencode--disconnect nil t)
-      (opencode-process-events)))
+      (opencode-process-events)
+      (opencode--fetch-agents)))
   (opencode-sessions-redisplay)
   (pop-to-buffer opencode-sessions-buffer))
 
@@ -139,6 +143,17 @@ Or nil to disable logging.")
   (opencode--log-event "DISCONNECT" event)
   (when (process-live-p opencode--plz-event-request)
     (kill-process opencode--plz-event-request)))
+
+(defun opencode--fetch-agents ()
+  "Fetch available agents from server and filter out subagents or hidden agents."
+  (opencode-api-agents agents
+    (setq opencode-agents
+          (mapcar (lambda (agent)
+                    (alist-get 'name agent))
+                  (seq-remove (lambda (agent)
+                                (or (string-equal "subagent" (alist-get 'mode agent))
+                                    (alist-get 'hidden agent)))
+                              agents)))))
 
 (defun opencode-process-events ()
   "Connect to the opencode event stream and process all events."
