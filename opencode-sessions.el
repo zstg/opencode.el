@@ -128,8 +128,7 @@
   "Kill SESSION."
   (opencode-api-delete-session ((alist-get 'id session))
       result
-    (if result
-        (opencode-sessions-redisplay)
+    (unless result
       (error "Unable to delete session"))))
 
 (defun opencode--highlight-input (&optional _proc _string)
@@ -463,8 +462,7 @@ Without it will use a default title and then automatically generate one."
                                       opencode-session-id))
         `((title . ,title))
         _res
-      (if session
-          (opencode-sessions-redisplay)
+      (unless session
         (rename-buffer
          (generate-new-buffer-name (format "*OpenCode: %s*" title)))))))
 
