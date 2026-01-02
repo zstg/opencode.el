@@ -167,6 +167,7 @@ body when it normally would (POST PATCH)."
      (patch rename-session "/session/%s")
      (post nodata abort-session "/session/%s/abort")
      (delete delete-session "/session/%s")
+     (post fork-session "/session/%s/fork")
      (commands "/command")
      "/file/status"
      (find-pattern "/find?pattern=%s")

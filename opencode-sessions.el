@@ -56,7 +56,9 @@
     "C-c C-y" 'opencode-yank-code-block
     "TAB" 'opencode-cycle-session-agent
     "C-c r" 'opencode-rename-session
-    "C-c m" 'opencode-select-model))
+    "C-c n" 'opencode-new-session
+    "C-c m" 'opencode-select-model
+    "C-c f" 'opencode-fork-session))
 
 (defvar-local opencode-session-id nil
   "Session id for the current opencode session buffer.")
@@ -82,7 +84,7 @@
   "Switch to the next agent in `opencode-agents'."
   (interactive)
   (let* ((pos (cl-position-if (lambda (agent)
-                                (string-equal (alist-get 'name agent)
+                                (string= (alist-get 'name agent)
                                               (alist-get 'name opencode-session-agent)))
                               opencode-agents))
          (next (nth (1+ pos) opencode-agents)))
@@ -114,11 +116,11 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
          (completion-extra-properties
           `(:annotation-function
             ,(lambda (cand)
-               (let* ((info (alist-get cand all-models nil nil #'string-equal))
+               (let* ((info (alist-get cand all-models nil nil #'string=))
                       (provider-name (cadr info)))
                  (format "  [%s]" provider-name)))))
          (selected (completing-read "Model: " candidates nil t)))
-    (when-let ((info (alist-get selected all-models nil nil #'string-equal)))
+    (when-let ((info (alist-get selected all-models nil nil #'string=)))
       (setq opencode-session-agent (copy-alist opencode-session-agent))
       (let* ((provider-id (car info))
              (model-id (caddr info)))
@@ -135,7 +137,7 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
                    (name name)))
           (model (map-nested-elt
                   (seq-find (lambda (provider)
-                              (string-equal .model.providerID (alist-get 'id provider)))
+                              (string= .model.providerID (alist-get 'id provider)))
                             opencode-providers)
                   `(models ,(intern .model.modelID) name)))
           (status (pcase opencode-session-status
@@ -279,10 +281,10 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
                (maybe-render-last-and-update-message-parts 'text)
                (opencode--output delta))
               ("tool" (maybe-render-last-and-update-message-parts 'tool)
-               (when (string-equal .state.status "running")
+               (when (string= .state.status "running")
                  (opencode--insert-tool-block .tool .state.input)))
               ("step-finish"
-               (when (string-equal "stop" .reason)
+               (when (string= "stop" .reason)
                  (opencode--render-last-block last-type last-start)
                  (opencode--maybe-insert-block-spacing)
                  (opencode--show-prompt))))))))))
@@ -498,6 +500,19 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
               (opencode--show-prompt)))
           (pop-to-buffer buffer))))))
 
+(defun opencode--current-message-number ()
+  "Return the 0-indexed message number at point.
+Counts prompts from the beginning of the buffer to the current position.
+Returns nil if point is before the first prompt."
+  (save-excursion
+    (end-of-line)
+    (comint-previous-prompt 1)
+    (let ((target-point (point)))
+      (goto-char (point-min))
+      (cl-loop do (comint-next-prompt 1)
+               while (< (point) target-point)
+               count t))))
+
 (defun opencode-new-session (&optional title)
   "Create a new session. With a prefix argument it will ask for TITLE.
 Without it will use a default title and then automatically generate one."
@@ -521,6 +536,31 @@ Without it will use a default title and then automatically generate one."
       (unless session
         (rename-buffer
          (generate-new-buffer-name (format "*OpenCode: %s*" title)))))))
+
+(defun opencode-fork-session ()
+  "Fork the current session from the message at point.
+Creates a new session starting from the current user message.
+If point is before the first prompt, creates a new session instead."
+  (interactive)
+  (unless opencode-session-id
+    (user-error "Not in an opencode session buffer"))
+  (if-let (message-number (opencode--current-message-number))
+      (opencode-api-session-messages (opencode-session-id)
+          messages
+        ;; Filter to only user messages, then get the Nth one
+        (let* ((user-messages (seq-filter (lambda (msg)
+                                            (string= "user" (map-nested-elt msg '(info role))))
+                                          messages))
+               (message (nth message-number user-messages)))
+          (if message
+              (let ((message-id (map-nested-elt message '(info id))))
+                (opencode-api-fork-session (opencode-session-id)
+                    `((messageID . ,message-id))
+                    session
+                  (opencode-open-session session)))
+            (user-error "No user message found at position %d" message-number))))
+    ;; if before the first prompt just open a new session
+    (opencode-new-session)))
 
 (defun opencode-sessions-redisplay ()
   "Refresh the session display table."

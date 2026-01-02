@@ -150,7 +150,7 @@ Or nil to disable logging.")
   (opencode-api-agents agents
     (setq opencode-agents
           (seq-remove (lambda (agent)
-                        (or (string-equal "subagent" (alist-get 'mode agent))
+                        (or (string= "subagent" (alist-get 'mode agent))
                             (alist-get 'hidden agent)))
                       agents))))
 
