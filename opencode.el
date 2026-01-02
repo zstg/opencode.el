@@ -55,30 +55,45 @@
   :type 'integer
   :group 'opencode)
 
-(defvar opencode--plz-event-request nil
-  "Request process streaming events from /event on opencode server.")
-
 (defvar opencode--event-subscriptions nil
   "An alist mapping: SSE event process to it's directory.")
 
+(defvar opencode--process nil
+  "Opencode server process when started by Emacs.")
+
 ;;;###autoload
-(defun opencode (&optional host port)
-  "Connect to opencode server, or open buffer to existing connection.
-If HOST and PORT are not given, use `opencode-host' and `opencode-port'.
-With a prefix argument, prompt for HOST and PORT."
+(defun opencode ()
+  "Open opencode sessions control buffer for the current project directory."
+  (interactive)
+  (let ((project-dir (when-let (proj (project-current))
+                       (directory-file-name (project-root proj)))))
+    (if opencode--event-subscriptions
+        (opencode-open-project project-dir)
+      (setf opencode--process (start-process "opencode" "*opencode-serve*"
+                                             "opencode" "serve"
+                                             "--port" (number-to-string opencode-port)
+                                             "--hostname" opencode-host))
+      (set-process-filter
+       opencode--process
+       (lambda (process output)
+         (when (string-prefix-p "opencode server listening on" output)
+           ;; Remove filter to avoid repeated callbacks
+           (set-process-filter process nil)
+           (opencode-connect opencode-host opencode-port)
+           (opencode-open-project project-dir)))))))
+
+(defun opencode-connect (host port)
+  "Connect to opencode server, prompting for HOST and PORT."
   (interactive
-   (if current-prefix-arg
-       (list (read-string "Host: " opencode-host)
-             (read-number "Port: " opencode-port))
-     (list opencode-host opencode-port)))
-  (unless (process-live-p opencode--plz-event-request)
-    (setq opencode-api-url (format "http://%s:%d" host port))
-    (opencode--fetch-agents)
-    (opencode-api-configured-providers result
-      (setq opencode-providers (alist-get 'providers result))))
-  (opencode-open-project
-   (when-let (proj (project-current))
-     (directory-file-name (project-root proj)))))
+   (list (read-string "Host: " opencode-host)
+         (read-number "Port: " opencode-port)))
+  (when opencode--event-subscriptions
+    (user-error "Already connected"))
+  (setq opencode-api-url (format "http://%s:%d" host port))
+  (opencode--fetch-agents)
+  (opencode-api-configured-providers result
+    (setq opencode-providers (alist-get 'providers result)))
+  (message "Connected to %s" opencode-api-url))
 
 (defun opencode-open-project (directory)
   "Open sessions control buffer for DIRECTORY."
@@ -180,7 +195,10 @@ Or nil to disable logging.")
   (interactive)
   (opencode--log-event "DISCONNECT" event)
   (cl-loop for (process) in opencode--event-subscriptions
+           when (process-live-p process)
            do (kill-process process))
+  (when (process-live-p opencode--process)
+    (kill-process opencode--process))
   (setq opencode--event-subscriptions nil))
 
 (defun opencode--fetch-agents ()
