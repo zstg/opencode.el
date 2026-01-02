@@ -24,11 +24,41 @@
 
 ;;; Code:
 
+(require 'map)
+
 (defvar opencode-agents nil
   "List of available primary agents (excluding sub-agents and hidden agents).")
 
 (defvar opencode-providers nil
   "List of available providers and models.")
+
+(defun opencode--updated-time (opencode-object)
+  "Return .time.updated value from OPENCODE-OBJECT."
+  (- (float-time)
+     (/ (map-nested-elt opencode-object '(time updated))
+        1000)))
+
+(defun opencode--annotated-completion (prompt candidates annotation-function)
+  "Simplified and formatted completing read with PROMPT.
+CANDIDATES is a list of lists, where the first element of each list is the
+string to show, and the whole list will be passed to ANNOTATION-FUNCTION.
+Returns the cdr of the list for the candidate selected (to return the info
+excluding the display string)."
+  (let* ((max-length (seq-max
+                      (mapcar (lambda (candidate)
+                                (length (car candidate)))
+                              candidates)))
+         (completion-extra-properties
+          `(:annotation-function
+            ,(lambda (candidate)
+               (concat (make-string (+ 5 (- max-length
+                                            (length candidate)))
+                                    ?\s)
+                       (funcall annotation-function
+                                (cdr (assoc-string candidate candidates))))))))
+    (cdr (assoc-string
+          (completing-read prompt candidates nil t)
+          candidates))))
 
 (provide 'opencode-common)
 ;;; opencode-common.el ends here

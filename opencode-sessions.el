@@ -112,23 +112,18 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
   (interactive)
   (unless opencode-session-agent
     (user-error "not in a session"))
-  (let* ((all-models (opencode--collect-all-models))
-         (candidates (mapcar #'car all-models))
-         (completion-extra-properties
-          `(:annotation-function
-            ,(lambda (cand)
-               (let* ((info (alist-get cand all-models nil nil #'string=))
-                      (provider-name (cadr info)))
-                 (format "  [%s]" provider-name)))))
-         (selected (completing-read "Model: " candidates nil t)))
-    (when-let ((info (alist-get selected all-models nil nil #'string=)))
-      (setq opencode-session-agent (copy-alist opencode-session-agent))
-      (let* ((provider-id (car info))
-             (model-id (caddr info)))
-        (setf (alist-get 'model opencode-session-agent)
-              `((providerID . ,provider-id)
-                (modelID . ,model-id)))
-        (force-mode-line-update)))))
+  (when-let ((info (opencode--annotated-completion
+                    "Model: "
+                    (opencode--collect-all-models)
+                    (lambda (candidate)
+                      (cl-second candidate)))))
+    (setq opencode-session-agent (copy-alist opencode-session-agent))
+    (let* ((provider-id (car info))
+           (model-id (caddr info)))
+      (setf (alist-get 'model opencode-session-agent)
+            `((providerID . ,provider-id)
+              (modelID . ,model-id)))
+      (force-mode-line-update))))
 
 (defun opencode--session-status-indicator ()
   "Return mode line indicator for session status."
@@ -615,10 +610,7 @@ If point is before the first prompt, creates a new session instead."
                        :getter (lambda (object column vtable)
                                  (pcase (vtable-column vtable column)
                                    ("Title" (alist-get 'title object))
-                                   ("Last Updated" (- (float-time)
-                                                      (/ (alist-get 'updated
-                                                                    (alist-get 'time object))
-                                                         1000)))
+                                   ("Last Updated" (opencode--updated-time object))
                                    ("Files changed" (let-alist (alist-get 'summary object)
                                                       (if (or (null .files) (zerop .files))
                                                           "none"
