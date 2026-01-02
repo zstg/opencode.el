@@ -55,6 +55,7 @@
   (define-keymap
     "C-c C-y" 'opencode-yank-code-block
     "C-c C-c" 'opencode-abort-session
+    "C-c x" 'opencode-kill-session
     "TAB" 'opencode-cycle-session-agent
     "C-c r" 'opencode-rename-session
     "C-c n" 'opencode-new-session
@@ -177,12 +178,18 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
                          (progn (markdown-forward-block)
                                 (point)))))
 
-(defun opencode-kill-session (session)
+(defun opencode-kill-session (&optional session)
   "Kill SESSION."
-  (opencode-api-delete-session ((alist-get 'id session))
+  (interactive)
+  (opencode-api-delete-session ((or (alist-get 'id session)
+                                    opencode-session-id))
       result
     (unless result
-      (error "Unable to delete session"))))
+      (error "Unable to delete session"))
+    ;; if called from session control buffer, don't kill
+    ;; if called from a session buffer to kill this buffer
+    (unless session
+      (kill-this-buffer))))
 
 (defun opencode--highlight-input (&optional _proc _string)
   "Highlight last prompt input."
