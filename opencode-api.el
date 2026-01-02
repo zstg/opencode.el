@@ -56,9 +56,11 @@ and saving to CURRENT-BUFFER while running BODY."
            :as (lambda () (unless (string-empty-p (buffer-string))
                        (json-parse-buffer :array-type 'list
                                           :object-type 'alist)))
+           :headers `(("Content-Type" . "application/json")
+                      ,(when opencode-directory
+                         (cons "x-opencode-directory" opencode-directory)))
            ,@(when data
-               `(:headers '(("Content-Type" . "application/json"))
-                 :body (json-encode ,saved-data)))
+               `(:body (json-encode ,saved-data)))
            :then (lambda (,result)
                    (when opencode-api-log-max-lines
                      (with-current-buffer

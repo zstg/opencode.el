@@ -32,9 +32,6 @@
 (require 'opencode-common)
 (require 'vtable)
 
-(defvar opencode-sessions-buffer nil
-  "Buffer of current opencode session.")
-
 (defvar opencode-session-control-mode-map
   (define-keymap
     "r" 'opencode-sessions-redisplay
@@ -65,8 +62,10 @@
 (defvar-local opencode-session-id nil
   "Session id for the current opencode session buffer.")
 
-(defvar-local opencode-session-directory nil
-  "Directory for the current opencode session buffer.")
+(defvar-local opencode-directory nil
+  "Directory for the opencode project for the current buffer.
+This is the project directory that will be sent to the server via
+the x-opencode-directory header.")
 
 (defvar-local opencode-session-status "idle"
   "Status of the current opencode session (busy or idle).")
@@ -402,7 +401,7 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
   "Format TOOL call with INPUT arguments for display."
   (let-alist input
     (when .filePath
-      (setf .filePath (file-relative-name .filePath opencode-session-directory)))
+      (setf .filePath (file-relative-name .filePath opencode-directory)))
     (pcase tool
       ("edit"
        (concat "edit " .filePath ":\n"
@@ -426,7 +425,7 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
       ("glob"
        (format "glob \"%s\" in %s\n\n"
                .pattern
-               (file-relative-name .path opencode-session-directory)))
+               (file-relative-name .path opencode-directory)))
       ("todowrite"
        (concat (opencode--render-todos .todos) "\n\n"))
       (_ (if (= 1 (length input))
@@ -482,11 +481,12 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
   (let-alist session
     (if (buffer-live-p (gethash .id opencode-session-buffers))
         (pop-to-buffer (gethash .id opencode-session-buffers))
-      (let ((buffer (generate-new-buffer (format "*OpenCode: %s*" .title))))
+      (let ((buffer (generate-new-buffer (format "*OpenCode: %s*" .title)))
+            (directory opencode-directory))
         (with-current-buffer buffer
           (opencode-session-mode)
           (setq opencode-session-id .id
-                opencode-session-directory .directory
+                opencode-directory directory
                 opencode-session-agent (car opencode-agents))
           (puthash .id buffer opencode-session-buffers)
           (let ((proc (start-process "dummy" buffer nil)))
@@ -589,47 +589,50 @@ If point is before the first prompt, creates a new session instead."
     (unless success-p
       (message "Failed to abort session."))))
 
+(defun opencode-session-control-buffer-name (directory)
+  "Return name of the session control buffer for DIRECTORY."
+  (format "*OpenCode Sessions in %s*" directory))
+
 (defun opencode-sessions-redisplay ()
-  "Refresh the session display table."
+  "Refresh the session display table for DIRECTORY."
   (interactive)
   (opencode-api-sessions sessions
-    (with-current-buffer opencode-sessions-buffer
-      (let ((inhibit-read-only t)
-            (point (point)))
-        (erase-buffer)
-        (if sessions
-            (make-vtable :columns '("Title"
-                                    (:name "Last Updated" :width 12
-                                     :formatter seconds-to-string
-                                     :primary ascend)
-                                    (:name "Files changed" :width 13 :align right)
-                                    "Created at")
-                         :objects sessions
-                         :actions '("x" opencode-kill-session
-                                    "R" opencode-rename-session
-                                    "RET" opencode-open-session
-                                    "o" opencode-open-session)
-                         :getter (lambda (object column vtable)
-                                   (pcase (vtable-column vtable column)
-                                     ("Title" (alist-get 'title object))
-                                     ("Last Updated" (- (float-time)
-                                                        (/ (alist-get 'updated
-                                                                      (alist-get 'time object))
-                                                           1000)))
-                                     ("Files changed" (let-alist (alist-get 'summary object)
-                                                        (if (or (null .files) (zerop .files))
-                                                            "none"
-                                                          (format "%d  +%d-%d" .files .additions .deletions))))
-                                     ("Created at" (format-time-string
-                                                    "%Y-%m-%d %H:%M:%S"
-                                                    (seconds-to-time (/ (alist-get 'created
-                                                                                   (alist-get 'time
-                                                                                              object))
-                                                                        1000))))))
-                         :separator-width 3
-                         :keymap opencode-session-control-mode-map)
-          (insert "No sessions"))
-        (goto-char point)))))
+    (let ((inhibit-read-only t)
+          (point (point)))
+      (erase-buffer)
+      (if sessions
+          (make-vtable :columns '("Title"
+                                  (:name "Last Updated" :width 12
+                                   :formatter seconds-to-string
+                                   :primary ascend)
+                                  (:name "Files changed" :width 13 :align right)
+                                  "Created at")
+                       :objects sessions
+                       :actions '("x" opencode-kill-session
+                                  "R" opencode-rename-session
+                                  "RET" opencode-open-session
+                                  "o" opencode-open-session)
+                       :getter (lambda (object column vtable)
+                                 (pcase (vtable-column vtable column)
+                                   ("Title" (alist-get 'title object))
+                                   ("Last Updated" (- (float-time)
+                                                      (/ (alist-get 'updated
+                                                                    (alist-get 'time object))
+                                                         1000)))
+                                   ("Files changed" (let-alist (alist-get 'summary object)
+                                                      (if (or (null .files) (zerop .files))
+                                                          "none"
+                                                        (format "%d  +%d-%d" .files .additions .deletions))))
+                                   ("Created at" (format-time-string
+                                                  "%Y-%m-%d %H:%M:%S"
+                                                  (seconds-to-time (/ (alist-get 'created
+                                                                                 (alist-get 'time
+                                                                                            object))
+                                                                      1000))))))
+                       :separator-width 3
+                       :keymap opencode-session-control-mode-map)
+        (insert "No sessions"))
+      (goto-char point))))
 
 (provide 'opencode-sessions)
 ;;; opencode-sessions.el ends here

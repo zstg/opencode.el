@@ -35,6 +35,7 @@
 (require 'opencode-sessions)
 (require 'plz-media-type)
 (require 'plz-event-source)
+(require 'project)
 
 (defgroup opencode nil
   "Emacs interface to opencode."
@@ -57,6 +58,9 @@
 (defvar opencode--plz-event-request nil
   "Request process streaming events from /event on opencode server.")
 
+(defvar opencode--event-subscriptions nil
+  "An alist mapping: SSE event process to it's directory.")
+
 ;;;###autoload
 (defun opencode (&optional host port)
   "Connect to opencode server, or open buffer to existing connection.
@@ -67,18 +71,22 @@ With a prefix argument, prompt for HOST and PORT."
        (list (read-string "Host: " opencode-host)
              (read-number "Port: " opencode-port))
      (list opencode-host opencode-port)))
-  (unless (process-live-p opencode--plz-event-request)
-    (setq opencode-sessions-buffer (generate-new-buffer "*OpenCode Sessions*"))
-    (with-current-buffer opencode-sessions-buffer
-      (opencode-session-control-mode)
-      (setq opencode-api-url (format "http://%s:%d" host port))
-      (add-hook 'kill-buffer-hook #'opencode--disconnect nil t)
-      (opencode-process-events)
+  (let* ((directory (when-let (proj (project-current))
+                      (directory-file-name (project-root proj))))
+         (buffer-name (opencode-session-control-buffer-name directory)))
+    (unless (process-live-p opencode--plz-event-request)
       (opencode--fetch-agents)
       (opencode-api-configured-providers result
-        (setq opencode-providers (alist-get 'providers result)))))
-  (opencode-sessions-redisplay)
-  (pop-to-buffer opencode-sessions-buffer))
+        (setq opencode-providers (alist-get 'providers result))))
+    (unless (rassoc directory opencode--event-subscriptions)
+      (opencode-process-events directory))
+    (unless (get-buffer buffer-name)
+      (with-current-buffer (get-buffer-create buffer-name)
+        (opencode-session-control-mode)
+        (setq opencode-api-url (format "http://%s:%d" host port)
+              opencode-directory directory)
+        (opencode-sessions-redisplay)))
+    (pop-to-buffer buffer-name)))
 
 (defvar opencode-event-log-max-lines nil
   "Maximum number of lines to log in the opencode event log buffer.
@@ -134,17 +142,22 @@ Or nil to disable logging.")
                                                     (variant . "success")
                                                     (timeout . 1000)))))))
         (session.status (opencode-session--set-status .sessionID .status.type))
-        ((session.created session.updated session.deleted) (opencode-sessions-redisplay))
+        ((session.created session.updated session.deleted)
+         (if-let (buffer (get-buffer (opencode-session-control-buffer-name .info.directory)))
+             (with-current-buffer buffer
+                 (opencode-sessions-redisplay))))
         (session.error (opencode-session--display-error .sessionID .error.data.message))
         (message.part.updated (opencode-session--update-part .part .delta))
         (message.updated (opencode-session--message-updated .info))
         (otherwise (opencode--log-event "WARNING" "unhandled message type"))))))
 
-(defun opencode--disconnect (&optional event)
+(defun opencode-disconnect (&optional event)
   "Disconnect from opencode server, optionally log EVENT."
+  (interactive)
   (opencode--log-event "DISCONNECT" event)
-  (when (process-live-p opencode--plz-event-request)
-    (kill-process opencode--plz-event-request)))
+  (cl-loop for (process) in opencode--event-subscriptions
+           do (kill-process process))
+  (setq opencode--event-subscriptions nil))
 
 (defun opencode--fetch-agents ()
   "Fetch available agents from server and filter out subagents or hidden agents."
@@ -155,21 +168,25 @@ Or nil to disable logging.")
                             (alist-get 'hidden agent)))
                       agents))))
 
-(defun opencode-process-events ()
-  "Connect to the opencode event stream and process all events."
-  (setf opencode--plz-event-request
-        (plz-media-type-request
-          'get (concat opencode-api-url "/event")
-          :as `(media-types
-                ((text/event-stream
-                  . ,(plz-event-source:text/event-stream
-                      :events `((open . ,(lambda (event)
-                                           (opencode--log-event "OPEN" event)))
-                                (message . opencode--handle-message)
-                                (close . opencode--disconnect))))))
-          :then 'opencode--disconnect
-          :else 'opencode--disconnect))
-  (set-process-query-on-exit-flag opencode--plz-event-request nil))
+(defun opencode-process-events (directory)
+  "Connect to the opencode event stream and process all events for DIRECTORY."
+  (let ((process
+         (plz-media-type-request
+           'get (concat opencode-api-url "/event")
+           :as `(media-types
+                 ((text/event-stream
+                   . ,(plz-event-source:text/event-stream
+                       :events `((open . ,(lambda (event)
+                                            (opencode--log-event "OPEN" event)))
+                                 (message . ,(lambda (event)
+                                               (let ((opencode-directory directory))
+                                                 (opencode--handle-message event))))
+                                 (close . opencode-disconnect))))))
+           :headers `(("x-opencode-directory" . ,directory))
+           :then 'opencode-disconnect
+           :else 'opencode-disconnect)))
+    (set-process-query-on-exit-flag process nil)
+    (push (cons process directory) opencode--event-subscriptions)))
 
 (provide 'opencode)
 ;;; opencode.el ends here
