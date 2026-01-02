@@ -623,7 +623,7 @@ If point is before the first prompt, creates a new session instead."
                                                                       1000))))))
                        :separator-width 3
                        :keymap opencode-session-control-mode-map)
-        (insert "No sessions"))
+        (insert "No sessions in " opencode-directory))
       (goto-char point))))
 
 (provide 'opencode-sessions)
