@@ -387,11 +387,12 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
    (mapconcat
     (lambda (todo)
       (let-alist todo
-        (format "- [%s] %s"
+        (format "%s %s"
                 (pcase .status
-                  ((or "pending" "in_progress") " ")
-                  ("completed" "x")
-                  ("cancelled" "-")
+                  ("pending" "📌")
+                  ("in_progress" "▶")
+                  ("completed" "✅")
+                  ("cancelled" "❌")
                   (_ " "))
                 .content)))
     todos
