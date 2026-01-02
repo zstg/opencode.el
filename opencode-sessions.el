@@ -151,7 +151,7 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
 
 (defun opencode-session--set-status (session-id status)
   "Set STATUS for the session with SESSION-ID and update modeline."
-  (when-let ((buffer (gethash session-id opencode-session-buffers)))
+  (when-let (buffer (gethash session-id opencode-session-buffers))
     (when (buffer-live-p buffer)
       (with-current-buffer buffer
         (setq opencode-session-status status)
@@ -563,6 +563,14 @@ If point is before the first prompt, creates a new session instead."
             (user-error "No user message found at position %d" message-number))))
     ;; if before the first prompt just open a new session
     (opencode-new-session)))
+
+(defun opencode-session--display-error (session-id message)
+  "Display error MESSAGE in SESSION-ID and then new prompt."
+  (when-let (buffer (gethash session-id opencode-session-buffers))
+    (with-current-buffer buffer
+      (opencode--output (propertize message 'face 'error))
+      (opencode--output "\n\n")
+      (opencode--show-prompt))))
 
 (defun opencode-abort-session ()
   "Abort a busy session and go back to prompt."
