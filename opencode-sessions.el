@@ -108,7 +108,7 @@ Each element is (display-name . (provider-id provider-name model-id))."
 Creates a new copy of the agent to avoid mutating `opencode-agents'."
   (interactive)
   (unless opencode-session-agent
-    (error "not in a session"))
+    (user-error "not in a session"))
   (let* ((all-models (opencode--collect-all-models))
          (candidates (mapcar #'car all-models))
          (completion-extra-properties
@@ -409,17 +409,23 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
                .command))
       ("websearch"
        (format "websearch \"%s\"\n\n" .query))
+      ("call_omo_agent"
+       (format "call_omo_agent: %s\n\n%s\n\n" .description .prompt))
+      ("glob"
+       (format "glob \"%s\" in %s\n\n"
+               .pattern
+               (file-relative-name .path opencode-session-directory)))
       ("todowrite"
        (concat (opencode--render-todos .todos) "\n\n"))
       (_ (if (= 1 (length input))
              (format "%s %s\n\n" tool (cdar input))
            ;; Multiple arguments: tool-name, then arg-name: value per line
-           (concat tool "\n"
+           (concat tool " ["
                    (mapconcat (lambda (pair)
-                                (format "  %s: %s" (car pair) (cdr pair)))
+                                (format "%s=%s" (car pair) (cdr pair)))
                               input
-                              "\n")
-                   "\n\n"))))))
+                              ", ")
+                   "]\n\n"))))))
 
 (defun opencode--insert-block-with-margin (text face)
   "Insert TEXT with FACE margin highlight."
