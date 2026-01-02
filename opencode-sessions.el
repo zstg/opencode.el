@@ -54,6 +54,7 @@
 (defvar opencode-session-mode-map
   (define-keymap
     "C-c C-y" 'opencode-yank-code-block
+    "C-c C-c" 'opencode-abort-session
     "TAB" 'opencode-cycle-session-agent
     "C-c r" 'opencode-rename-session
     "C-c n" 'opencode-new-session
@@ -203,10 +204,11 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
   "Handle message.updated event with INFO."
   (let-alist info
     (pcase .role
-      ("assistant" (if .finish
-                       (setf opencode-assistant-messages
-                             (assoc-delete-all .id opencode-assistant-messages))
-                     (push (cons .id nil) opencode-assistant-messages))))))
+      ("assistant"
+       (if (or .finish .error)
+           (setf opencode-assistant-messages
+                 (assoc-delete-all .id opencode-assistant-messages))
+         (push (cons .id nil) opencode-assistant-messages))))))
 
 (defun opencode--render-last-block (type start)
   "Render block of TYPE (reasoning or text) since START with PROCESS."
@@ -561,6 +563,14 @@ If point is before the first prompt, creates a new session instead."
             (user-error "No user message found at position %d" message-number))))
     ;; if before the first prompt just open a new session
     (opencode-new-session)))
+
+(defun opencode-abort-session ()
+  "Abort a busy session and go back to prompt."
+  (interactive)
+  (opencode-api-abort-session (opencode-session-id)
+      success-p
+    (unless success-p
+      (message "Failed to abort session."))))
 
 (defun opencode-sessions-redisplay ()
   "Refresh the session display table."
