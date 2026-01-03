@@ -257,7 +257,8 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
   (opencode--output (propertize "> " 'invisible t))
   (opencode--add-margin (car comint-last-prompt)
                         (cdr comint-last-prompt)
-                        'opencode-request-margin-highlight))
+                        'opencode-request-margin-highlight)
+  (goto-char (point-max)))
 
 (defun opencode-session--update-part (part delta)
   "Display PART, partial message output. DELTA is new text since last update."
