@@ -583,7 +583,8 @@ If point is before the first prompt, creates a new session instead."
   (interactive)
   (opencode-api-sessions sessions
     (let ((inhibit-read-only t)
-          (point (point)))
+          (point (point))
+          cache)
       (erase-buffer)
       (if sessions
           (make-vtable :columns '("Title"
@@ -605,7 +606,9 @@ If point is before the first prompt, creates a new session instead."
                                      ("Title" .title)
                                      ("Branch" (if (file-exists-p .directory)
                                                    (let ((default-directory .directory))
-                                                     (magit-get-current-branch))
+                                                     (with-memoization
+                                                         (map-elt cache .directory)
+                                                       (magit-get-current-branch)))
                                                  "-"))
                                      ("Last Updated" (opencode--time-ago object 'updated))
                                      ("Files changed" (let-alist .summary
