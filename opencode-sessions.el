@@ -477,12 +477,13 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
   (let-alist session
     (if (buffer-live-p (gethash .id opencode-session-buffers))
         (pop-to-buffer (gethash .id opencode-session-buffers))
-      (let ((buffer (generate-new-buffer (format "*OpenCode: %s*" .title))))
+      (let ((buffer (generate-new-buffer (format "*OpenCode: %s*" .title)))
+            (agent opencode-session-agent))
         (with-current-buffer buffer
           (opencode-session-mode)
           (setq opencode-session-id .id
                 opencode-directory .directory
-                opencode-session-agent (car opencode-agents))
+                opencode-session-agent (or agent (car opencode-agents)))
           (puthash .id buffer opencode-session-buffers)
           (let ((proc (start-process "dummy" buffer nil)))
             (set-process-query-on-exit-flag proc nil)
