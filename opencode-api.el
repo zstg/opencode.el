@@ -172,6 +172,7 @@ body when it normally would (POST PATCH)."
      (post nodata abort-session "/session/%s/abort")
      (delete delete-session "/session/%s")
      (post fork-session "/session/%s/fork")
+     (post respond-permission-request "/session/%s/permissions/%s")
      (commands "/command")
      "/file/status"
      (find-pattern "/find?pattern=%s")

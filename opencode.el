@@ -172,6 +172,21 @@ Or nil to disable logging.")
      :replaces-id 5647
      :app-icon 'none)))
 
+(defun opencode--permission-request (permission-id session-id type title)
+  "Respond to permission request from opencode.
+Args are PERMISSION-ID, SESSION-ID, and the TYPE and TITLE of the request."
+  (opencode-api-respond-permission-request (session-id permission-id)
+      `((response . ,(x-popup-dialog
+                      t
+                      `(,(format "OpenCode Permission Request\n%s: %s"
+                                 type title)
+                        ("Accept" . "once")
+                        ("Accept Always" . "always")
+                        ("Deny" . "reject")))))
+      response
+    (unless response
+      (user-error "Response to permission request failed"))))
+
 (defun opencode--handle-message (event)
   "Handle a message EVENT from opencode server."
   (let ((data (json-read-from-string (plz-event-source-event-data event))))
@@ -192,10 +207,11 @@ Or nil to disable logging.")
         ((session.created session.updated session.deleted)
          (if-let (buffer (get-buffer (opencode-session-control-buffer-name .info.directory)))
              (with-current-buffer buffer
-                 (opencode-sessions-redisplay))))
+               (opencode-sessions-redisplay))))
         (session.error (opencode-session--display-error .sessionID .error.data.message))
         (message.part.updated (opencode-session--update-part .part .delta))
         (message.updated (opencode-session--message-updated .info))
+        (permission.updated (opencode--permission-request .id .sessionID .type .title))
         (otherwise (opencode--log-event "WARNING" "unhandled message type"))))))
 
 (defun opencode-disconnect (&optional event)
