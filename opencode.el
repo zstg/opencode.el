@@ -206,8 +206,12 @@ Args are PERMISSION-ID, SESSION-ID, and the TYPE and TITLE of the request."
         (session.idle (opencode-api-session (.sessionID)
                           session
                         (let ((buffer (gethash .sessionID opencode-session-buffers)))
-                          (unless (and (eq buffer (window-buffer (selected-window)))
-                                       (frame-focus-state (window-frame (selected-window))))
+                          (unless (or
+                                   ;; don't show alert if the buffer and frame is active
+                                   (and (eq buffer (window-buffer (selected-window)))
+                                        (frame-focus-state (window-frame (selected-window))))
+                                   ;; don't show alert for subagent sessions
+                                   (alist-get 'parentID session))
                             (opencode--toast-show `((title . "OpenCode Finished")
                                                     (message . ,(alist-get 'title session))
                                                     (variant . "success")
@@ -256,6 +260,31 @@ Without it will use a default title and then automatically generate one."
                                    (make-hash-table))
         session
       (opencode-open-session session))))
+
+(defun opencode-fork-session ()
+  "Fork the current session from the message at point.
+Creates a new session starting from the current user message.
+If point is before the first prompt, creates a new session instead."
+  (interactive)
+  (unless opencode-session-id
+    (user-error "Not in an opencode session buffer"))
+  (if-let (message-number (opencode--current-message-number))
+      (opencode-api-session-messages (opencode-session-id)
+          messages
+        ;; Filter to only user messages, then get the Nth one
+        (let* ((user-messages (seq-filter (lambda (msg)
+                                            (string= "user" (map-nested-elt msg '(info role))))
+                                          messages))
+               (message (nth message-number user-messages)))
+          (if message
+              (let ((message-id (map-nested-elt message '(info id))))
+                (opencode-api-fork-session (opencode-session-id)
+                    `((messageID . ,message-id))
+                    session
+                  (opencode-open-session session)))
+            (user-error "No user message found at position %d" message-number))))
+    ;; if before the first prompt just open a new session
+    (opencode-new-session)))
 
 (defun opencode-process-events (directory)
   "Connect to the opencode event stream and process all events for DIRECTORY."

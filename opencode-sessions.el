@@ -38,13 +38,18 @@
     "r" 'opencode-sessions-redisplay
     "g" nil
     "SPC" nil
-    "n" 'opencode-new-session))
+    "n" 'opencode-new-session
+    "v" 'opencode-session-control-toggle-verbose))
 
 (with-eval-after-load 'evil
   (declare-function evil-define-key "evil-core")
   (evil-define-key 'normal opencode-session-control-mode-map
     "r" 'opencode-sessions-redisplay
-    "n" 'opencode-new-session))
+    "n" 'opencode-new-session
+    "gv" 'opencode-session-control-toggle-verbose))
+
+(defvar-local opencode-session-control-verbose nil
+  "Toggle whether to display subagents in session control buffer.")
 
 (define-derived-mode opencode-session-control-mode special-mode "Sessions"
   "Opencode session control panel mode.")
@@ -533,31 +538,6 @@ Returns nil if point is before the first prompt."
         (rename-buffer
          (generate-new-buffer-name (format "*OpenCode: %s*" title)))))))
 
-(defun opencode-fork-session ()
-  "Fork the current session from the message at point.
-Creates a new session starting from the current user message.
-If point is before the first prompt, creates a new session instead."
-  (interactive)
-  (unless opencode-session-id
-    (user-error "Not in an opencode session buffer"))
-  (if-let (message-number (opencode--current-message-number))
-      (opencode-api-session-messages (opencode-session-id)
-          messages
-        ;; Filter to only user messages, then get the Nth one
-        (let* ((user-messages (seq-filter (lambda (msg)
-                                            (string= "user" (map-nested-elt msg '(info role))))
-                                          messages))
-               (message (nth message-number user-messages)))
-          (if message
-              (let ((message-id (map-nested-elt message '(info id))))
-                (opencode-api-fork-session (opencode-session-id)
-                    `((messageID . ,message-id))
-                    session
-                  (opencode-open-session session)))
-            (user-error "No user message found at position %d" message-number))))
-    ;; if before the first prompt just open a new session
-    (opencode-new-session)))
-
 (defun opencode-session--display-error (session-id message)
   "Display error MESSAGE in SESSION-ID and then new prompt."
   (when-let (buffer (gethash session-id opencode-session-buffers))
@@ -574,12 +554,24 @@ If point is before the first prompt, creates a new session instead."
     (unless success-p
       (message "Failed to abort session."))))
 
+(defun opencode-session-control-toggle-verbose ()
+  "Toggle verbose mode in session control buffer."
+  (interactive)
+  (setq opencode-session-control-verbose
+        (not opencode-session-control-verbose))
+  (opencode-sessions-redisplay))
+
 (defun opencode-sessions-redisplay ()
   "Refresh the session display table for DIRECTORY."
   (interactive)
   (opencode-api-sessions sessions
     (let ((inhibit-read-only t)
           (point (point))
+          (sessions (if opencode-session-control-verbose
+                        sessions
+                      (seq-remove (lambda (session)
+                                    (alist-get 'parentID session))
+                                  sessions)))
           cache)
       (erase-buffer)
       (if sessions
