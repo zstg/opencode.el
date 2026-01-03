@@ -65,7 +65,8 @@
   (interactive)
   (let ((project-dir (when-let (proj (project-current))
                        (directory-file-name (project-root proj)))))
-    (if opencode--event-subscriptions
+    (if (or opencode--event-subscriptions
+            (process-live-p opencode--process))
         (opencode-open-project project-dir)
       (setf opencode--process (start-process "opencode" "*opencode-serve*"
                                              "opencode" "serve"
