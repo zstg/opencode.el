@@ -47,7 +47,14 @@
     "n" 'opencode-new-session))
 
 (define-derived-mode opencode-session-control-mode special-mode "Sessions"
-  "Opencode session control panel mode.")
+  "Opencode session control panel mode."
+  (opencode-api-current-project project
+    (let-alist project
+      (setf (map-elt opencode--session-control-buffers .id)
+            (cons (current-buffer)
+                  (seq-filter #'buffer-live-p
+                              (map-elt opencode--session-control-buffers .id))))))
+  (opencode-sessions-redisplay))
 
 (defvar opencode-session-mode-map
   (define-keymap
@@ -573,10 +580,6 @@ If point is before the first prompt, creates a new session instead."
       success-p
     (unless success-p
       (message "Failed to abort session."))))
-
-(defun opencode-session-control-buffer-name (directory)
-  "Return name of the session control buffer for DIRECTORY."
-  (format "*OpenCode Sessions in %s*" directory))
 
 (defun opencode-sessions-redisplay ()
   "Refresh the session display table for DIRECTORY."

@@ -63,8 +63,9 @@
 (defun opencode ()
   "Open opencode sessions control buffer for the current project directory."
   (interactive)
-  (let ((project-dir (when-let (proj (project-current))
-                       (directory-file-name (project-root proj)))))
+  (let ((project-dir (or opencode-directory
+                         (when-let (proj (project-current))
+                           (directory-file-name (project-root proj))))))
     (if (or opencode--event-subscriptions
             (process-live-p opencode--process))
         (opencode-open-project project-dir)
@@ -97,12 +98,11 @@
 (defun opencode-open-project (directory)
   "Open sessions control buffer for DIRECTORY."
   (opencode-process-events directory)
-  (let ((buffer-name (opencode-session-control-buffer-name directory)))
+  (let ((buffer-name (format "*OpenCode Sessions in %s*" directory)))
     (unless (get-buffer buffer-name)
       (with-current-buffer (get-buffer-create buffer-name)
-        (opencode-session-control-mode)
         (setq opencode-directory directory)
-        (opencode-sessions-redisplay)))
+        (opencode-session-control-mode)))
     (pop-to-buffer buffer-name)))
 
 (defvar opencode-worktree-directory (expand-file-name "~/opencode_worktrees/")
@@ -206,9 +206,9 @@ Args are PERMISSION-ID, SESSION-ID, and the TYPE and TITLE of the request."
                                                     (timeout . 1000)))))))
         (session.status (opencode-session--set-status .sessionID .status.type))
         ((session.created session.updated session.deleted)
-         (if-let (buffer (get-buffer (opencode-session-control-buffer-name .info.directory)))
-             (with-current-buffer buffer
-               (opencode-sessions-redisplay))))
+         (dolist (buffer (map-elt opencode--session-control-buffers .info.projectID))
+           (with-current-buffer buffer
+             (opencode-sessions-redisplay))))
         (session.error (opencode-session--display-error .sessionID .error.data.message))
         (message.part.updated (opencode-session--update-part .part .delta))
         (message.updated (opencode-session--message-updated .info))

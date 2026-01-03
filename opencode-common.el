@@ -35,6 +35,9 @@
 (defvar opencode--event-subscriptions nil
   "An alist mapping: SSE event process to it's directory.")
 
+(defvar opencode--session-control-buffers nil
+  "An alist mapping of projectIDs to session control buffers for that project.")
+
 (defun opencode--time-ago (opencode-object type)
   "Return .time.TYPE value from OPENCODE-OBJECT, as seconds ago."
   (- (float-time)
