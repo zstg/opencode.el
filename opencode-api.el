@@ -82,7 +82,9 @@ and saving to CURRENT-BUFFER while running BODY."
                          (save-excursion
                            (goto-char (point-max))
                            (insert "ERROR: " error-msg "\n"))))
-                     (error error-msg)))))))
+                     (if opencode--event-subscriptions
+                         (error error-msg)
+                       (error "Not connected to opencode"))))))))
 
   (cl-defun opencode-api--wrap (method path &key elisp-macro-name nodata)
     "Define a macro to wrap api call with METHOD and PATH.

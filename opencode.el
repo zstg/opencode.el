@@ -55,9 +55,6 @@
   :type 'integer
   :group 'opencode)
 
-(defvar opencode--event-subscriptions nil
-  "An alist mapping: SSE event process to it's directory.")
-
 (defvar opencode--process nil
   "Opencode server process when started by Emacs.")
 
@@ -97,8 +94,7 @@
 
 (defun opencode-open-project (directory)
   "Open sessions control buffer for DIRECTORY."
-  (unless (rassoc directory opencode--event-subscriptions)
-      (opencode-process-events directory))
+  (opencode-process-events directory)
   (let ((buffer-name (opencode-session-control-buffer-name directory)))
     (unless (get-buffer buffer-name)
       (with-current-buffer (get-buffer-create buffer-name)
@@ -107,6 +103,22 @@
         (opencode-sessions-redisplay)))
     (pop-to-buffer buffer-name)))
 
+(defvar opencode-worktree-directory (expand-file-name "~/opencode_worktrees/")
+  "Directory to store worktrees created for opencode.")
+
+(defun opencode-new-worktree ()
+  "Create a new git branch, and worktree prompting for a name.
+Then open an opencode session in it."
+  (interactive)
+  (let* ((name (read-string "Worktree and branch name: "))
+         (opencode-directory (file-name-concat opencode-worktree-directory name)))
+    (declare-function magit-worktree-branch "magit-worktree")
+    (if (require 'magit nil t)
+        (progn
+          (magit-worktree-branch opencode-directory name "HEAD")
+          (opencode-process-events opencode-directory)
+          (opencode-new-session))
+      (user-error "This relies on magit which isn't available"))))
 
 (defun opencode-select-project ()
   "Completing read to prompt which project to select."
@@ -212,23 +224,24 @@ Or nil to disable logging.")
 
 (defun opencode-process-events (directory)
   "Connect to the opencode event stream and process all events for DIRECTORY."
-  (let ((process
-         (plz-media-type-request
-           'get (concat opencode-api-url "/event")
-           :as `(media-types
-                 ((text/event-stream
-                   . ,(plz-event-source:text/event-stream
-                       :events `((open . ,(lambda (event)
-                                            (opencode--log-event "OPEN" event)))
-                                 (message . ,(lambda (event)
-                                               (let ((opencode-directory directory))
-                                                 (opencode--handle-message event))))
-                                 (close . opencode-disconnect))))))
-           :headers `(("x-opencode-directory" . ,directory))
-           :then 'opencode-disconnect
-           :else 'opencode-disconnect)))
-    (set-process-query-on-exit-flag process nil)
-    (push (cons process directory) opencode--event-subscriptions)))
+  (unless (rassoc directory opencode--event-subscriptions)
+    (let ((process
+           (plz-media-type-request
+             'get (concat opencode-api-url "/event")
+             :as `(media-types
+                   ((text/event-stream
+                     . ,(plz-event-source:text/event-stream
+                         :events `((open . ,(lambda (event)
+                                              (opencode--log-event "OPEN" event)))
+                                   (message . ,(lambda (event)
+                                                 (let ((opencode-directory directory))
+                                                   (opencode--handle-message event))))
+                                   (close . opencode-disconnect))))))
+             :headers `(("x-opencode-directory" . ,directory))
+             :then 'opencode-disconnect
+             :else 'opencode-disconnect)))
+      (set-process-query-on-exit-flag process nil)
+      (push (cons process directory) opencode--event-subscriptions))))
 
 (provide 'opencode)
 ;;; opencode.el ends here

@@ -32,6 +32,9 @@
 (defvar opencode-providers nil
   "List of available providers and models.")
 
+(defvar opencode--event-subscriptions nil
+  "An alist mapping: SSE event process to it's directory.")
+
 (defun opencode--updated-time (opencode-object)
   "Return .time.updated value from OPENCODE-OBJECT."
   (- (float-time)
