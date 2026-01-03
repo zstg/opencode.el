@@ -35,10 +35,10 @@
 (defvar opencode--event-subscriptions nil
   "An alist mapping: SSE event process to it's directory.")
 
-(defun opencode--updated-time (opencode-object)
-  "Return .time.updated value from OPENCODE-OBJECT."
+(defun opencode--time-ago (opencode-object type)
+  "Return .time.TYPE value from OPENCODE-OBJECT, as seconds ago."
   (- (float-time)
-     (/ (map-nested-elt opencode-object '(time updated))
+     (/ (map-nested-elt opencode-object `(time ,type))
         1000)))
 
 (defun opencode--annotated-completion (prompt candidates annotation-function)

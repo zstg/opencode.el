@@ -27,6 +27,7 @@
 (require 'comint)
 (require 'diff)
 (require 'diff-mode)
+(require 'magit)
 (require 'markdown-mode)
 (require 'opencode-api)
 (require 'opencode-common)
@@ -520,18 +521,6 @@ Returns nil if point is before the first prompt."
                while (< (point) target-point)
                count t))))
 
-(defun opencode-new-session (&optional title)
-  "Create a new session. With a prefix argument it will ask for TITLE.
-Without it will use a default title and then automatically generate one."
-  (interactive
-   (list (when current-prefix-arg
-           (read-string "Title: "))))
-  (opencode-api-create-session (if title
-                                   `((title . ,title))
-                            (make-hash-table))
-      session
-    (opencode-open-session session)))
-
 (defun opencode-rename-session (&optional session)
   "Rename SESSION. If in a session buffer, rename that session."
   (interactive)
@@ -598,30 +587,32 @@ If point is before the first prompt, creates a new session instead."
       (erase-buffer)
       (if sessions
           (make-vtable :columns '("Title"
+                                  (:name "Branch" :min-width 6)
                                   (:name "Last Updated" :width 12
                                    :formatter seconds-to-string
                                    :primary ascend)
                                   (:name "Files changed" :width 13 :align right)
-                                  "Created at")
+                                  (:name "Created at" :width 10
+                                   :formatter seconds-to-string))
                        :objects sessions
                        :actions '("x" opencode-kill-session
                                   "R" opencode-rename-session
                                   "RET" opencode-open-session
                                   "o" opencode-open-session)
                        :getter (lambda (object column vtable)
-                                 (pcase (vtable-column vtable column)
-                                   ("Title" (alist-get 'title object))
-                                   ("Last Updated" (opencode--updated-time object))
-                                   ("Files changed" (let-alist (alist-get 'summary object)
-                                                      (if (or (null .files) (zerop .files))
-                                                          "none"
-                                                        (format "%d  +%d-%d" .files .additions .deletions))))
-                                   ("Created at" (format-time-string
-                                                  "%Y-%m-%d %H:%M:%S"
-                                                  (seconds-to-time (/ (alist-get 'created
-                                                                                 (alist-get 'time
-                                                                                            object))
-                                                                      1000))))))
+                                 (let-alist object
+                                   (pcase (vtable-column vtable column)
+                                     ("Title" .title)
+                                     ("Branch" (if (file-exists-p .directory)
+                                                   (let ((default-directory .directory))
+                                                     (magit-get-current-branch))
+                                                 "-"))
+                                     ("Last Updated" (opencode--time-ago object 'updated))
+                                     ("Files changed" (let-alist .summary
+                                                        (if (or (null .files) (zerop .files))
+                                                            "none"
+                                                          (format "%d  +%d-%d" .files .additions .deletions))))
+                                     ("Created at" (opencode--time-ago object 'created)))))
                        :separator-width 3
                        :keymap opencode-session-control-mode-map)
         (insert "No sessions in " opencode-directory))

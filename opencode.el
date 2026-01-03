@@ -29,6 +29,7 @@
 ;;; Code:
 
 (require 'json)
+(require 'magit)
 (require 'notifications)
 (require 'opencode-api)
 (require 'opencode-common)
@@ -112,13 +113,8 @@ Then open an opencode session in it."
   (interactive)
   (let* ((name (read-string "Worktree and branch name: "))
          (opencode-directory (file-name-concat opencode-worktree-directory name)))
-    (declare-function magit-worktree-branch "magit-worktree")
-    (if (require 'magit nil t)
-        (progn
-          (magit-worktree-branch opencode-directory name "HEAD")
-          (opencode-process-events opencode-directory)
-          (opencode-new-session))
-      (user-error "This relies on magit which isn't available"))))
+    (magit-worktree-branch opencode-directory name "HEAD")
+    (opencode-new-session)))
 
 (defun opencode-select-project ()
   "Completing read to prompt which project to select."
@@ -134,8 +130,8 @@ Then open an opencode session in it."
                                                               worktree)
                                                              worktree
                                                              (seconds-to-string
-                                                              (opencode--updated-time
-                                                               project))))
+                                                              (opencode--time-ago
+                                                               project 'updated))))
                                       (lambda (candidate)
                                         (cl-second candidate)))))))
 
@@ -221,6 +217,20 @@ Or nil to disable logging.")
                         (or (string= "subagent" (alist-get 'mode agent))
                             (alist-get 'hidden agent)))
                       agents))))
+
+(defun opencode-new-session (&optional title)
+  "Create a new session. With a prefix argument it will ask for TITLE.
+Without it will use a default title and then automatically generate one."
+  (interactive
+   (list (when current-prefix-arg
+           (read-string "Title: "))))
+  (let ((opencode-directory (or opencode-directory default-directory)))
+    (opencode-process-events opencode-directory)
+    (opencode-api-create-session (if title
+                                     `((title . ,title))
+                                   (make-hash-table))
+        session
+      (opencode-open-session session))))
 
 (defun opencode-process-events (directory)
   "Connect to the opencode event stream and process all events for DIRECTORY."
