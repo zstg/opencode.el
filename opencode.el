@@ -101,8 +101,16 @@
   (let ((buffer-name (format "*OpenCode Sessions in %s*" directory)))
     (unless (get-buffer buffer-name)
       (with-current-buffer (get-buffer-create buffer-name)
+        (opencode-session-control-mode)
         (setq opencode-directory directory)
-        (opencode-session-control-mode)))
+        (opencode-api-current-project project
+          (let-alist project
+            (setf (map-elt opencode--session-control-buffers .id)
+                  (cons (current-buffer)
+                        (seq-filter #'buffer-live-p
+                                    (map-elt opencode--session-control-buffers
+                                             .id))))))
+        (opencode-sessions-redisplay)))
     (pop-to-buffer buffer-name)))
 
 (defvar opencode-worktree-directory (expand-file-name "~/opencode_worktrees/")

@@ -47,14 +47,7 @@
     "n" 'opencode-new-session))
 
 (define-derived-mode opencode-session-control-mode special-mode "Sessions"
-  "Opencode session control panel mode."
-  (opencode-api-current-project project
-    (let-alist project
-      (setf (map-elt opencode--session-control-buffers .id)
-            (cons (current-buffer)
-                  (seq-filter #'buffer-live-p
-                              (map-elt opencode--session-control-buffers .id))))))
-  (opencode-sessions-redisplay))
+  "Opencode session control panel mode.")
 
 (defvar opencode-session-mode-map
   (define-keymap
