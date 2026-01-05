@@ -42,13 +42,6 @@
     "U" 'opencode-unshare-all-sessions
     "v" 'opencode-session-control-toggle-verbose))
 
-(with-eval-after-load 'evil
-  (declare-function evil-define-key "evil-core")
-  (evil-define-key 'normal opencode-session-control-mode-map
-    "r" 'opencode-sessions-redisplay
-    "n" 'opencode-new-session
-    "gv" 'opencode-session-control-toggle-verbose))
-
 (defvar-local opencode-session-control-verbose nil
   "Toggle whether to display subagents in session control buffer.")
 
@@ -69,7 +62,17 @@
     "C-c u" 'opencode-unshare-session
     "C-c U" 'opencode-unshare-all-sessions
     "C-c m" 'opencode-select-model
-    "C-c f" 'opencode-fork-session))
+    "C-c f" 'opencode-fork-session
+    "/" 'opencode-insert-slash-command))
+
+(with-eval-after-load 'evil
+  (declare-function evil-define-key "evil-core")
+  (evil-define-key 'normal opencode-session-control-mode-map
+    "r" 'opencode-sessions-redisplay
+    "n" 'opencode-new-session
+    "gv" 'opencode-session-control-toggle-verbose)
+  (evil-define-key 'insert opencode-session-mode-map
+    "/" 'opencode-insert-slash-command))
 
 (defvar-local opencode-session-id nil
   "Session id for the current opencode session buffer.")
@@ -194,6 +197,24 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
             (when (alist-get 'share session)
               (opencode-unshare-session session))))))))
 
+(defun opencode-insert-slash-command ()
+  "Insert an opencode slash command."
+  (interactive)
+  (if (= (point) (cdr comint-last-prompt))
+      (let ((command (cl-first
+                      (opencode--annotated-completion
+                       "Slash command: "
+                       (cl-loop for command in opencode-slash-commands
+                                collect (let-alist command
+                                          (list
+                                           .name
+                                           .name
+                                           .description)))
+                       (lambda (candidate)
+                         (cl-second candidate))))))
+        (insert (concat "/" command)))
+    (call-interactively #'self-insert-command)))
+
 (defun opencode--session-status-indicator ()
   "Return mode line indicator for session status."
   (let-alist opencode-session-agent
@@ -264,11 +285,19 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
   "Send STRING as input to current opencode session."
   (opencode--highlight-input)
   (opencode--output "\n")
-  (opencode-api-send-message (opencode-session-id)
-      `((agent . ,(alist-get 'name opencode-session-agent))
-        ,(assoc 'model opencode-session-agent)
-        (parts ((type . text) (text . ,string))))
-      _result))
+  (let-alist opencode-session-agent
+    (if (string-match "^/\\([^ ]*\\) ?\\(.*\\)$" string)
+        (opencode-api-execute-command (opencode-session-id)
+            `((agent . ,.name)
+              (model . ,(concat .model.providerID "/" .model.modelID))
+              (command . ,(match-string 1 string))
+              (arguments . ,(match-string 2 string)))
+            _response))
+    (opencode-api-send-message (opencode-session-id)
+        `((agent . ,(alist-get 'name opencode-session-agent))
+          ,(assoc 'model opencode-session-agent)
+          (parts ((type . text) (text . ,string))))
+        _result)))
 
 (defun opencode-session--message-updated (info)
   "Handle message.updated event with INFO."

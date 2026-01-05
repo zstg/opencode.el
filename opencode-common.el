@@ -29,6 +29,9 @@
 (defvar opencode-agents nil
   "List of available primary agents (excluding sub-agents and hidden agents).")
 
+(defvar opencode-slash-commands nil
+  "List of available slash commands.")
+
 (defvar opencode-providers nil
   "List of available providers and models.")
 

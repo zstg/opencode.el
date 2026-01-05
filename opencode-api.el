@@ -175,6 +175,7 @@ body when it normally would (POST PATCH)."
      (post respond-permission-request "/session/%s/permissions/%s")
      (post nodata share-session "/session/%s/share")
      (delete unshare-session "/session/%s/share")
+     (post execute-command "/session/%s/command")
      (commands "/command")
      "/file/status"
      (find-pattern "/find?pattern=%s")

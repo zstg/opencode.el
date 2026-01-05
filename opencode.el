@@ -91,6 +91,8 @@
     (user-error "Already connected"))
   (setq opencode-api-url (format "http://%s:%d" host port))
   (opencode--fetch-agents)
+  (opencode-api-commands commands
+    (setq opencode-slash-commands commands))
   (opencode-api-configured-providers result
     (setq opencode-providers (alist-get 'providers result)))
   (message "Connected to %s" opencode-api-url))
