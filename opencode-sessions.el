@@ -62,6 +62,8 @@
     "TAB" 'opencode-cycle-session-agent
     "C-c r" 'opencode-rename-session
     "C-c n" 'opencode-new-session
+    "C-c c" 'opencode-select-child-session
+    "C-c p" 'opencode-open-parent
     "C-c m" 'opencode-select-model
     "C-c f" 'opencode-fork-session))
 
@@ -131,6 +133,34 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
               (modelID . ,model-id)))
       (force-mode-line-update))))
 
+(defun opencode-select-child-session ()
+  "Open a child (subagent) session of the current session."
+  (interactive)
+  (opencode-api-session-children (opencode-session-id)
+      children
+    (opencode-open-session
+     (cl-first
+      (opencode--annotated-completion
+       "Subagent: "
+       (cl-loop for child in children
+                collect (let-alist child
+                          (list .title
+                                child
+                                (seconds-to-string
+                                 (opencode--time-ago
+                                  child 'updated)))))
+       (lambda (candidate)
+         (cl-second candidate)))))))
+
+(defun opencode-open-parent ()
+  "Open the parent of the current session."
+  (interactive)
+  (opencode-api-session (opencode-session-id)
+      session
+    (opencode-api-session ((alist-get 'parentID session))
+        parent
+      (opencode-open-session parent))))
+
 (defun opencode--session-status-indicator ()
   "Return mode line indicator for session status."
   (let-alist opencode-session-agent
@@ -186,8 +216,8 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
       result
     (unless result
       (error "Unable to delete session"))
-    ;; if called from session control buffer, don't kill
-    ;; if called from a session buffer to kill this buffer
+    ;; if called from session control buffer, don't kill buffer
+    ;; but if called from a session buffer then kill this buffer
     (unless session
       (kill-this-buffer))))
 
@@ -425,9 +455,11 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
       ("call_omo_agent"
        (format "call_omo_agent: %s\n\n%s\n\n" .description .prompt))
       ("glob"
-       (format "glob \"%s\" in %s\n\n"
-               .pattern
-               (file-relative-name .path opencode-directory)))
+       (if .path
+           (format "glob \"%s\" in %s\n\n"
+                   .pattern
+                   (file-relative-name .path opencode-directory))
+         (format "glob \"%s\"" .pattern)))
       ("todowrite"
        (concat (opencode--render-todos .todos) "\n\n"))
       (_ (if (= 1 (length input))
@@ -575,37 +607,38 @@ Returns nil if point is before the first prompt."
           cache)
       (erase-buffer)
       (if sessions
-          (make-vtable :columns '("Title"
-                                  (:name "Branch" :min-width 6)
-                                  (:name "Last Updated" :width 12
-                                   :formatter seconds-to-string
-                                   :primary ascend)
-                                  (:name "Files changed" :width 13 :align right)
-                                  (:name "Created at" :width 10
-                                   :formatter seconds-to-string))
-                       :objects sessions
-                       :actions '("x" opencode-kill-session
-                                  "R" opencode-rename-session
-                                  "RET" opencode-open-session
-                                  "o" opencode-open-session)
-                       :getter (lambda (object column vtable)
-                                 (let-alist object
-                                   (pcase (vtable-column vtable column)
-                                     ("Title" .title)
-                                     ("Branch" (if (file-exists-p .directory)
-                                                   (let ((default-directory .directory))
-                                                     (with-memoization
-                                                         (map-elt cache .directory)
-                                                       (magit-get-current-branch)))
-                                                 "-"))
-                                     ("Last Updated" (opencode--time-ago object 'updated))
-                                     ("Files changed" (let-alist .summary
-                                                        (if (or (null .files) (zerop .files))
-                                                            "none"
-                                                          (format "%d  +%d-%d" .files .additions .deletions))))
-                                     ("Created at" (opencode--time-ago object 'created)))))
-                       :separator-width 3
-                       :keymap opencode-session-control-mode-map)
+          (make-vtable
+           :columns '("Title"
+                      (:name "Branch" :min-width 6)
+                      (:name "Last Updated" :width 12
+                       :formatter seconds-to-string
+                       :primary ascend)
+                      (:name "Files changed" :width 13 :align right)
+                      (:name "Created at" :width 10
+                       :formatter seconds-to-string))
+           :objects sessions
+           :actions '("x" opencode-kill-session
+                      "R" opencode-rename-session
+                      "RET" opencode-open-session
+                      "o" opencode-open-session)
+           :getter (lambda (object column vtable)
+                     (let-alist object
+                       (pcase (vtable-column vtable column)
+                         ("Title" .title)
+                         ("Branch" (if (file-exists-p .directory)
+                                       (let ((default-directory .directory))
+                                         (with-memoization
+                                             (map-elt cache .directory)
+                                           (magit-get-current-branch)))
+                                     "-"))
+                         ("Last Updated" (opencode--time-ago object 'updated))
+                         ("Files changed" (let-alist .summary
+                                            (if (or (null .files) (zerop .files))
+                                                "none"
+                                              (format "%d  +%d-%d" .files .additions .deletions))))
+                         ("Created at" (opencode--time-ago object 'created)))))
+           :separator-width 3
+           :keymap opencode-session-control-mode-map)
         (insert "No sessions in " opencode-directory))
       (goto-char point))))
 

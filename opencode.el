@@ -131,18 +131,19 @@ Then open an opencode session in it."
   (opencode-api-projects projects
     (opencode-open-project
      (cl-first
-      (opencode--annotated-completion "Project: "
-                                      (cl-loop for project in projects
-                                               for worktree = (alist-get 'worktree project)
-                                               collect (list (string-remove-prefix
-                                                              (expand-file-name "~/")
-                                                              worktree)
-                                                             worktree
-                                                             (seconds-to-string
-                                                              (opencode--time-ago
-                                                               project 'updated))))
-                                      (lambda (candidate)
-                                        (cl-second candidate)))))))
+      (opencode--annotated-completion
+       "Project: "
+       (cl-loop for project in projects
+                for worktree = (alist-get 'worktree project)
+                collect (list (string-remove-prefix
+                               (expand-file-name "~/")
+                               worktree)
+                              worktree
+                              (seconds-to-string
+                               (opencode--time-ago
+                                project 'updated))))
+       (lambda (candidate)
+         (cl-second candidate)))))))
 
 (defvar opencode-event-log-max-lines nil
   "Maximum number of lines to log in the opencode event log buffer.
@@ -174,8 +175,7 @@ Or nil to disable logging.")
      :title .title
      :body .message
      :urgency (pcase .variant
-                ("error" 'critical)
-                ("warning" 'critical)
+                ((or "error" "warning" )'critical)
                 ((or "info" "success") 'normal))
      :timeout .duration
      :replaces-id 5647

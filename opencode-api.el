@@ -162,7 +162,7 @@ body when it normally would (POST PATCH)."
      (session-todos "/session/%s/todo")
      (session-diff "/session/%s/diff")
      (session-messages "/session/%s/message")
-     (post sync-message "/session/%/message")
+     (post sync-message "/session/%s/message")
      (post send-message "/session/%s/prompt_async")
      (message-details "/session/%s/message/%s")
      (sessions "/session")
