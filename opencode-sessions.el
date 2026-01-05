@@ -39,6 +39,7 @@
     "g" nil
     "SPC" nil
     "n" 'opencode-new-session
+    "U" 'opencode-unshare-all-sessions
     "v" 'opencode-session-control-toggle-verbose))
 
 (with-eval-after-load 'evil
@@ -64,6 +65,9 @@
     "C-c n" 'opencode-new-session
     "C-c c" 'opencode-select-child-session
     "C-c p" 'opencode-open-parent
+    "C-c s" 'opencode-share-session
+    "C-c u" 'opencode-unshare-session
+    "C-c U" 'opencode-unshare-all-sessions
     "C-c m" 'opencode-select-model
     "C-c f" 'opencode-fork-session))
 
@@ -160,6 +164,35 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
     (opencode-api-session ((alist-get 'parentID session))
         parent
       (opencode-open-session parent))))
+
+(defun opencode-share-session (&optional session)
+  "Share SESSION or the current session."
+  (interactive)
+  (opencode-api-share-session ((or (alist-get 'id session)
+                                   opencode-session-id))
+      session
+    (let ((url (map-nested-elt session '(share url))))
+      (gui-select-text url)
+      (message "Copied to clipboard: %s" url))))
+
+(defun opencode-unshare-session (&optional session)
+  "Unshare SESSION or the current session."
+  (interactive)
+  (opencode-api-unshare-session ((or (alist-get 'id session)
+                                     opencode-session-id))
+      _session
+    (message "Session no longer shared")))
+
+(defun opencode-unshare-all-sessions ()
+  "Unshare all sessions across all projects."
+  (interactive)
+  (opencode-api-projects projects
+    (dolist (project projects)
+      (let ((opencode-directory (alist-get 'worktree project)))
+        (opencode-api-sessions sessions
+          (dolist (session sessions)
+            (when (alist-get 'share session)
+              (opencode-unshare-session session))))))))
 
 (defun opencode--session-status-indicator ()
   "Return mode line indicator for session status."
@@ -619,12 +652,18 @@ Returns nil if point is before the first prompt."
            :objects sessions
            :actions '("x" opencode-kill-session
                       "R" opencode-rename-session
+                      "s" opencode-share-session
+                      "u" opencode-unshare-session
                       "RET" opencode-open-session
                       "o" opencode-open-session)
            :getter (lambda (object column vtable)
                      (let-alist object
                        (pcase (vtable-column vtable column)
-                         ("Title" .title)
+                         ("Title" (if .share
+                                      (concat (propertize "shared " 'face
+                                                          '(bold opencode-request-margin-highlight))
+                                              .title)
+                                    .title))
                          ("Branch" (if (file-exists-p .directory)
                                        (let ((default-directory .directory))
                                          (with-memoization
