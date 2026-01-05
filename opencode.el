@@ -197,6 +197,12 @@ Args are PERMISSION-ID, SESSION-ID, and the TYPE and TITLE of the request."
     (unless response
       (user-error "Response to permission request failed"))))
 
+(defun opencode--update-session-control-buffers (project-id)
+  "Call redisplay on all session control buffers."
+  (dolist (buffer (map-elt opencode--session-control-buffers project-id))
+    (with-current-buffer buffer
+      (opencode-sessions-redisplay))))
+
 (defun opencode--handle-message (event)
   "Handle a message EVENT from opencode server."
   (let ((data (json-read-from-string (plz-event-source-event-data event))))
@@ -218,10 +224,13 @@ Args are PERMISSION-ID, SESSION-ID, and the TYPE and TITLE of the request."
                                                     (variant . "success")
                                                     (timeout . 1000)))))))
         (session.status (opencode-session--set-status .sessionID .status.type))
-        ((session.created session.updated session.deleted)
-         (dolist (buffer (map-elt opencode--session-control-buffers .info.projectID))
+        (session.created (opencode--update-session-control-buffers .info.projectID))
+        (session.updated
+         (opencode--update-session-control-buffers .info.projectID)
+         (when-let (buffer (map-elt opencode-session-buffers .info.id))
            (with-current-buffer buffer
-             (opencode-sessions-redisplay))))
+             (rename-buffer (format "*OpenCode: %s*" .info.title)))))
+        (session.deleted (opencode--update-session-control-buffers .info.projectID))
         (session.error (opencode-session--display-error .sessionID .error.data.message))
         (message.part.updated (opencode-session--update-part .part .delta))
         (message.updated (opencode-session--message-updated .info))
