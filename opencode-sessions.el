@@ -582,7 +582,11 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
           (puthash .id buffer opencode-session-buffers)
           (let ((proc (start-process "dummy" buffer nil)))
             (set-process-query-on-exit-flag proc nil)
-            (add-hook 'kill-buffer-hook 'delete-process nil t)
+            (add-hook 'kill-buffer-hook
+                      (lambda ()
+                        (when (get-buffer-process (current-buffer))
+                          (delete-process)))
+                      nil t)
             (opencode-insert-logo)
             (opencode-api-session-messages (.id)
                 messages
