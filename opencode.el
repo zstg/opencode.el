@@ -63,9 +63,8 @@
 (defun opencode ()
   "Open opencode sessions control buffer for the current project directory."
   (interactive)
-  (let ((project-dir (or opencode-directory
-                         (when-let (proj (project-current))
-                           (directory-file-name (project-root proj))))))
+  (let ((project-dir (when-let (proj (project-current))
+                       (directory-file-name (project-root proj)))))
     (if (or opencode--event-subscriptions
             (process-live-p opencode--process))
         (opencode-open-project project-dir)
@@ -104,7 +103,7 @@
     (unless (get-buffer buffer-name)
       (with-current-buffer (get-buffer-create buffer-name)
         (opencode-session-control-mode)
-        (setq opencode-directory directory)
+        (setq default-directory directory)
         (opencode-api-current-project project
           (let-alist project
             (setf (map-elt opencode--session-control-buffers .id)
@@ -123,8 +122,8 @@
 Then open an opencode session in it."
   (interactive)
   (let* ((name (read-string "Worktree and branch name: "))
-         (opencode-directory (file-name-concat opencode-worktree-directory name)))
-    (magit-worktree-branch opencode-directory name "HEAD")
+         (default-directory (file-name-concat opencode-worktree-directory name)))
+    (magit-worktree-branch default-directory name "HEAD")
     (opencode-new-session)))
 
 (defun opencode-select-project ()
@@ -255,13 +254,12 @@ Without it will use a default title and then automatically generate one."
   (interactive
    (list (when current-prefix-arg
            (read-string "Title: "))))
-  (let ((opencode-directory (or opencode-directory default-directory)))
-    (opencode-process-events opencode-directory)
-    (opencode-api-create-session (if title
-                                     `((title . ,title))
-                                   (make-hash-table))
-        session
-      (opencode-open-session session))))
+  (opencode-process-events default-directory)
+  (opencode-api-create-session (if title
+                                   `((title . ,title))
+                                 (make-hash-table))
+      session
+    (opencode-open-session session)))
 
 (defun opencode-fork-session ()
   "Fork the current session from the message at point.
@@ -300,7 +298,7 @@ If point is before the first prompt, creates a new session instead."
                          :events `((open . ,(lambda (event)
                                               (opencode--log-event "OPEN" event)))
                                    (message . ,(lambda (event)
-                                                 (let ((opencode-directory directory))
+                                                 (let ((default-directory directory))
                                                    (opencode--handle-message event))))
                                    (close . opencode-disconnect))))))
              :headers `(("x-opencode-directory" . ,directory))

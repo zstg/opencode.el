@@ -57,8 +57,7 @@ and saving to CURRENT-BUFFER while running BODY."
                        (json-parse-buffer :array-type 'list
                                           :object-type 'alist)))
            :headers `(("Content-Type" . "application/json")
-                      ,(when opencode-directory
-                         (cons "x-opencode-directory" opencode-directory)))
+                      ,(cons "x-opencode-directory" default-directory))
            ,@(when data
                `(:body (json-encode ,saved-data)))
            :then (lambda (,result)

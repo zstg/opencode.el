@@ -77,11 +77,6 @@
 (defvar-local opencode-session-id nil
   "Session id for the current opencode session buffer.")
 
-(defvar-local opencode-directory nil
-  "Directory for the opencode project for the current buffer.
-This is the project directory that will be sent to the server via
-the x-opencode-directory header.")
-
 (defvar-local opencode-session-status "idle"
   "Status of the current opencode session (busy or idle).")
 
@@ -191,7 +186,7 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
   (interactive)
   (opencode-api-projects projects
     (dolist (project projects)
-      (let ((opencode-directory (alist-get 'worktree project)))
+      (let ((default-directory (alist-get 'worktree project)))
         (opencode-api-sessions sessions
           (dolist (session sessions)
             (when (alist-get 'share session)
@@ -495,7 +490,7 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
   "Format TOOL call with INPUT arguments for display."
   (let-alist input
     (when .filePath
-      (setf .filePath (file-relative-name .filePath opencode-directory)))
+      (setf .filePath (file-relative-name .filePath default-directory)))
     (pcase tool
       ("edit"
        (concat "edit " .filePath ":\n"
@@ -520,7 +515,7 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
        (if .path
            (format "glob \"%s\" in %s\n\n"
                    .pattern
-                   (file-relative-name .path opencode-directory))
+                   (file-relative-name .path default-directory))
          (format "glob \"%s\"" .pattern)))
       ("todowrite"
        (concat (opencode--render-todos .todos) "\n\n"))
@@ -582,7 +577,7 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
         (with-current-buffer buffer
           (opencode-session-mode)
           (setq opencode-session-id .id
-                opencode-directory .directory
+                default-directory .directory
                 opencode-session-agent (or agent (car opencode-agents)))
           (puthash .id buffer opencode-session-buffers)
           (let ((proc (start-process "dummy" buffer nil)))
@@ -707,7 +702,7 @@ Returns nil if point is before the first prompt."
                          ("Created at" (opencode--time-ago object 'created)))))
            :separator-width 3
            :keymap opencode-session-control-mode-map)
-        (insert "No sessions in " opencode-directory))
+        (insert "No sessions in " default-directory))
       (goto-char point))))
 
 (provide 'opencode-sessions)
