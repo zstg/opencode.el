@@ -140,19 +140,21 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
   (interactive)
   (opencode-api-session-children (opencode-session-id)
       children
-    (opencode-open-session
-     (cl-first
-      (opencode--annotated-completion
-       "Subagent: "
-       (cl-loop for child in children
-                collect (let-alist child
-                          (list .title
-                                child
-                                (seconds-to-string
-                                 (opencode--time-ago
-                                  child 'updated)))))
-       (lambda (candidate)
-         (cl-second candidate)))))))
+    (if children
+        (opencode-open-session
+         (cl-first
+          (opencode--annotated-completion
+           "Subagent: "
+           (cl-loop for child in children
+                    collect (let-alist child
+                              (list .title
+                                    child
+                                    (seconds-to-string
+                                     (opencode--time-ago
+                                      child 'updated)))))
+           (lambda (candidate)
+             (cl-second candidate)))))
+      (message "No children"))))
 
 (defun opencode-open-parent ()
   "Open the parent of the current session."
