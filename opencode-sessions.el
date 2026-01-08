@@ -493,8 +493,9 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
   (opencode--show-prompt)
   (dolist (part (alist-get 'parts message))
     (let-alist part
-      (pcase .type
-        ("text" (insert .text)))))
+      (unless .synthetic
+        (pcase .type
+          ("text" (insert .text))))))
   (insert "\n")
   (let ((comint-input-sender #'opencode--highlight-input))
     (comint-send-input)))
