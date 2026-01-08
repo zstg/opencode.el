@@ -221,8 +221,9 @@ Args are PERMISSION-ID, SESSION-ID, and the TYPE and TITLE of the request."
         (session.status (opencode-session--set-status .sessionID .status.type))
         ((session.created session.updated session.deleted)
          (dolist (buffer (map-elt opencode--session-control-buffers .info.projectID))
-           (with-current-buffer buffer
-             (opencode-sessions-redisplay)))
+           (when (buffer-live-p buffer)
+             (with-current-buffer buffer
+               (opencode-sessions-redisplay))))
          (when-let (buffer (map-elt opencode-session-buffers .info.id))
            (with-current-buffer buffer
              (cl-case msg-type
