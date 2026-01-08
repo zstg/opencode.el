@@ -250,9 +250,9 @@ Args are PERMISSION-ID, SESSION-ID, and the TYPE and TITLE of the request."
   "Fetch available agents from server and filter out subagents or hidden agents."
   (opencode-api-agents agents
     (setq opencode-agents
-          (seq-remove (lambda (agent)
-                        (or (string= "subagent" (alist-get 'mode agent))
-                            (alist-get 'hidden agent)))
+          (seq-filter (lambda (agent)
+                        (and (string= "primary" (alist-get 'mode agent))
+                             (not (alist-get 'hidden agent))))
                       agents))))
 
 (defun opencode-new-session (&optional title)
