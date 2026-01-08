@@ -591,7 +591,11 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
   "Insert TEXT with FACE margin highlight."
   (let ((beginning (opencode--session-process-position)))
     (opencode--output text)
-    (opencode--add-margin beginning (opencode--session-process-position) face)))
+    (opencode--add-margin beginning (save-excursion
+                                      (goto-char (opencode--session-process-position))
+                                      (skip-chars-backward "\r\n[:blank:]")
+                                      (point))
+                          face)))
 
 (defun opencode--insert-reasoning-block (text)
   "Insert TEXT as reasoning block."
