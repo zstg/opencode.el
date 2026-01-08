@@ -26,6 +26,12 @@
 
 (require 'map)
 
+(defcustom opencode-default-model '((providerID . "opencode")
+                                    (modelID . "big-pickle"))
+  "Default model to use."
+  :type '(alist :key-type symbol :value-type string)
+  :group 'opencode)
+
 (defvar opencode-agents nil
   "List of available primary agents (excluding sub-agents and hidden agents).")
 
