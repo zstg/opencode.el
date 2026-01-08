@@ -61,6 +61,7 @@
     "C-c c" 'opencode-select-child-session
     "C-c p" 'opencode-open-parent
     "C-c f" 'opencode-add-file
+    "C-c b" 'opencode-add-buffer
     "C-c s" 'opencode-share-session
     "C-c u" 'opencode-unshare-session
     "C-c U" 'opencode-unshare-all-sessions
@@ -289,19 +290,39 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
     (ext (or (mailcap-extension-to-mime ext)
              "text/plain"))))
 
-(defun opencode--remove-file (overlay after _beg _end &optional _len)
+(defun opencode--remove-label (overlay after _beg _end &optional _len)
   "Called AFTER deleting OVERLAY, remove the associated file from context."
   (when (and after
              (not (eq this-command 'comint-send-input)))
-    (let ((fileurl (overlay-get overlay 'fileurl))
+    (let ((file-url (overlay-get overlay 'file-url))
+          (buffer-name (overlay-get overlay 'buffer-name))
           (ov-start (overlay-start overlay))
           (ov-end (overlay-end overlay)))
       (setq opencode--extra-parts
             (seq-remove (lambda (part)
-                          (string= fileurl (alist-get 'url part)))
+                          (let-alist part
+                            (or (string= file-url .url)
+                                (string= buffer-name .metadata.buffer-name))))
                         opencode--extra-parts))
       (delete-region ov-start ov-end)
       (delete-overlay overlay))))
+
+(defun opencode--insert-intangible (name extra-prop extra-value)
+  "Insert an intangible label with NAME (buffer or filename).
+Assign the overlay EXTRA-PROP with EXTRA-VALUE."
+  (let* ((start (point))
+         (end (progn (insert "`")
+                     (insert (propertize name
+                                         'cursor-intangible t))
+                     (insert (propertize "`"
+                                         'rear-nonsticky t))
+                     (point)))
+         (ov (make-overlay start end)))
+    (overlay-put ov extra-prop extra-value)
+    (overlay-put ov 'display (propertize name
+                                         'face 'markdown-inline-code-face))
+    (overlay-put ov 'modification-hooks '(opencode--remove-label))
+    ov))
 
 (defun opencode-add-file ()
   "Add a file to context."
@@ -317,19 +338,22 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
             (mime . ,(opencode--mimetype file))
             (url . ,url))
           opencode--extra-parts)
-    (let* ((start (point))
-           (end (progn (insert "`")
-                       (insert (propertize relative-name
-                                           'cursor-intangible t))
-                       (insert (propertize "`"
-                                           'rear-nonsticky t))
-                       (point)))
-           (ov (make-overlay start end)))
-      (overlay-put ov 'fileurl url)
-      (overlay-put ov 'display (propertize relative-name
-                                           'face 'markdown-inline-code-face))
-      (overlay-put ov 'modification-hooks '(opencode--remove-file))
-      ov)))
+    (opencode--insert-intangible relative-name 'file-url url)))
+
+(defun opencode-add-buffer ()
+  "Add a buffer to context."
+  (interactive)
+  (let ((buffer (read-buffer "Add to context: ")))
+    (push `((type . text)
+            (text . ,(concat
+                      (format "<buffer name=\"%s\">" buffer)
+                      (with-current-buffer buffer
+                        (buffer-string))
+                      "</buffer>"))
+            (synthetic . t)
+            (metadata . ((buffer-name . ,buffer))))
+          opencode--extra-parts)
+    (opencode--insert-intangible buffer 'buffer-name buffer)))
 
 (defun opencode--send-input (_proc string)
   "Send STRING as input to current opencode session."
