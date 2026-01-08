@@ -35,6 +35,9 @@
 (defvar opencode-providers nil
   "List of available providers and models.")
 
+(defvar-local opencode--extra-parts nil
+  "An list containing extra parts to send with the next input.")
+
 (defvar opencode--event-subscriptions nil
   "An alist mapping: SSE event process to it's directory.")
 

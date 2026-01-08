@@ -28,9 +28,11 @@
 (require 'diff)
 (require 'diff-mode)
 (require 'magit)
+(require 'mailcap)
 (require 'markdown-mode)
 (require 'opencode-api)
 (require 'opencode-common)
+(require 'project)
 (require 'vtable)
 
 (defvar opencode-session-control-mode-map
@@ -58,11 +60,12 @@
     "C-c n" 'opencode-new-session
     "C-c c" 'opencode-select-child-session
     "C-c p" 'opencode-open-parent
+    "C-c f" 'opencode-add-file
     "C-c s" 'opencode-share-session
     "C-c u" 'opencode-unshare-session
     "C-c U" 'opencode-unshare-all-sessions
     "C-c m" 'opencode-select-model
-    "C-c f" 'opencode-fork-session
+    "C-c F" 'opencode-fork-session
     "/" 'opencode-insert-slash-command))
 
 (with-eval-after-load 'evil
@@ -248,6 +251,7 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
               left-margin-width (1+ left-margin-width))
   (visual-line-mode)
   (font-lock-mode -1)
+  (cursor-intangible-mode)
   (add-hook 'comint-input-filter-functions 'opencode--render-input-markdown nil t))
 
 (defun opencode-yank-code-block ()
@@ -278,6 +282,55 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
                         comint-last-input-end
                         'opencode-request-margin-highlight))
 
+(defun opencode--mimetype (file)
+  "Return guess of mimetype for FILE."
+  (pcase (file-name-extension file)
+    ((or "org" (pred null)) "text/plain")
+    (ext (or (mailcap-extension-to-mime ext)
+             "text/plain"))))
+
+(defun opencode--remove-file (overlay after _beg _end &optional _len)
+  "Called AFTER deleting OVERLAY, remove the associated file from context."
+  (when (and after
+             (not (eq this-command 'comint-send-input)))
+    (let ((fileurl (overlay-get overlay 'fileurl))
+          (ov-start (overlay-start overlay))
+          (ov-end (overlay-end overlay)))
+      (setq opencode--extra-parts
+            (seq-remove (lambda (part)
+                          (string= fileurl (alist-get 'url part)))
+                        opencode--extra-parts))
+      (delete-region ov-start ov-end)
+      (delete-overlay overlay))))
+
+(defun opencode-add-file ()
+  "Add a file to context."
+  (interactive)
+  (let* ((project (project-current t))
+         (all-files (project-files project))
+         (file (project--read-file-name project "Add to context"
+                                        all-files nil 'file-name-history))
+         (relative-name (file-relative-name file (project-root project)))
+         (url (concat "file://" file)))
+    (push `((type . file)
+            (filename . ,relative-name)
+            (mime . ,(opencode--mimetype file))
+            (url . ,url))
+          opencode--extra-parts)
+    (let* ((start (point))
+           (end (progn (insert "`")
+                       (insert (propertize relative-name
+                                           'cursor-intangible t))
+                       (insert (propertize "`"
+                                           'rear-nonsticky t))
+                       (point)))
+           (ov (make-overlay start end)))
+      (overlay-put ov 'fileurl url)
+      (overlay-put ov 'display (propertize relative-name
+                                           'face 'markdown-inline-code-face))
+      (overlay-put ov 'modification-hooks '(opencode--remove-file))
+      ov)))
+
 (defun opencode--send-input (_proc string)
   "Send STRING as input to current opencode session."
   (opencode--highlight-input)
@@ -293,8 +346,11 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
     (opencode-api-send-message (opencode-session-id)
         `((agent . ,(alist-get 'name opencode-session-agent))
           ,(assoc 'model opencode-session-agent)
-          (parts ((type . text) (text . ,string))))
-        _result)))
+          (parts . ,(nreverse
+                     (cons `((type . text) (text . ,string))
+                           opencode--extra-parts))))
+        _result)
+    (setf opencode--extra-parts nil)))
 
 (defun opencode-session--message-updated (info)
   "Handle message.updated event with INFO."
