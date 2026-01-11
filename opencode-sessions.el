@@ -125,6 +125,17 @@
     (opencode--set-agent (or next (car opencode-agents))))
   (force-mode-line-update))
 
+(defun opencode-select-session ()
+  "Select among open session buffers."
+  (interactive)
+  (switch-to-buffer
+   (read-buffer "Switch to: " nil t
+                (lambda (buf)
+                  (with-current-buffer (if (stringp buf)
+                                           buf
+                                         (cdr buf))
+                    opencode-session-id)))))
+
 (defun opencode--collect-all-models ()
   "Collect all models from `opencode-providers' as a list.
 Each element is (display-name . (provider-id provider-name model-id))."
