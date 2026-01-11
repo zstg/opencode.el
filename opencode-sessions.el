@@ -87,7 +87,7 @@
 (defvar-local opencode-session-agent nil
   "Currently active agent for this buffer's session.")
 
-(defvar-local opencode-session-model opencode-default-model
+(defvar-local opencode-session-model nil
   "Currently selected model for session when agent doesn't have default model.")
 
 (defvar opencode-session-buffers
@@ -668,11 +668,13 @@ Assign the overlay EXTRA-PROP with EXTRA-VALUE."
     (if (buffer-live-p (gethash .id opencode-session-buffers))
         (pop-to-buffer (gethash .id opencode-session-buffers))
       (let ((buffer (generate-new-buffer (format "*OpenCode: %s*" .title)))
-            (agent opencode-session-agent))
+            (agent opencode-session-agent)
+            (model opencode-session-model))
         (with-current-buffer buffer
           (opencode-session-mode)
           (setq opencode-session-id .id
-                default-directory .directory)
+                default-directory .directory
+                opencode-session-model (or model opencode-default-model))
           (opencode--set-agent (or agent (car opencode-agents)))
           (puthash .id buffer opencode-session-buffers)
           (let ((proc (start-process "dummy" buffer nil)))
