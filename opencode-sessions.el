@@ -148,6 +148,45 @@ Accepts (\"name\" . buffer) to work as a read-buffer predicate."
         (consult-line-multi '(:predicate opencode--session-buffer-p)))
     (user-error "This requires consult")))
 
+(defun opencode--window-selection-change-hook (_frame)
+  "Hook to remove session from the alerted sessions list when it's visited."
+  (when opencode-session-id
+    (setf opencode-alerted-sessions
+          (cl-delete-if (lambda (session)
+                          (string= opencode-session-id
+                                   (alist-get 'id session)))
+                        opencode-alerted-sessions))))
+
+(add-hook 'window-selection-change-functions 'opencode--window-selection-change-hook)
+
+(defun opencode-visit-last-idle ()
+  "Open the most recent session to notify as idle."
+  (interactive)
+  (if opencode-alerted-sessions
+      (opencode-open-session (pop opencode-alerted-sessions))
+    (message "No idle sessions")))
+
+(defun opencode--select-sessions (prompt sessions no-sessions-message)
+  "Select a session from SESSIONS to open.
+Use PROMPT and display NO-SESSIONS-MESSAGE if SESSIONS is empty."
+  (if sessions
+      (opencode-open-session
+       (opencode--annotated-completion
+        prompt
+        (cl-loop for session in sessions
+                 collect (let-alist session
+                           (list .title
+                                 session
+                                 (seconds-to-string
+                                  (opencode--time-ago
+                                   session 'updated)))))))
+    (message no-sessions-message)))
+
+(defun opencode-select-idle ()
+  "Select a session that hasn't been visited since it went idle."
+  (interactive)
+  (opencode--select-sessions "Session: " opencode-alerted-sessions "No idle sessions"))
+
 (defun opencode--collect-all-models ()
   "Collect all models from `opencode-providers' as a list.
 Each element is (display-name . (provider-id provider-name model-id))."
@@ -208,18 +247,7 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
   (interactive)
   (opencode-api-session-children (opencode-session-id)
       children
-    (if children
-        (opencode-open-session
-         (opencode--annotated-completion
-          "Subagent: "
-          (cl-loop for child in children
-                   collect (let-alist child
-                             (list .title
-                                   child
-                                   (seconds-to-string
-                                    (opencode--time-ago
-                                     child 'updated)))))))
-      (message "No children"))))
+    (opencode--select-sessions "Subagent: " children "No children")))
 
 (defun opencode-open-parent ()
   "Open the parent of the current session."

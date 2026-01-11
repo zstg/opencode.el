@@ -39,6 +39,9 @@
 (defvar opencode-slash-commands nil
   "List of available slash commands.")
 
+(defvar opencode-alerted-sessions nil
+  "List of unvisited idle sessions.")
+
 (defvar opencode-providers nil
   "List of available providers and models.")
 
