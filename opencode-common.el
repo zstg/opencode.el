@@ -24,6 +24,7 @@
 
 ;;; Code:
 
+(require 'cl-lib)
 (require 'map)
 
 (defcustom opencode-default-model '((providerID . "opencode")
@@ -56,12 +57,11 @@
      (/ (map-nested-elt opencode-object `(time ,type))
         1000)))
 
-(defun opencode--annotated-completion (prompt candidates annotation-function)
+(defun opencode--annotated-completion (prompt candidates)
   "Simplified and formatted completing read with PROMPT.
 CANDIDATES is a list of lists, where the first element of each list is the
-string to show, and the whole list will be passed to ANNOTATION-FUNCTION.
-Returns the cdr of the list for the candidate selected (to return the info
-excluding the display string)."
+string to show, the second is the value to return, and the third is the
+annotation to show."
   (let* ((max-length (seq-max
                       (mapcar (lambda (candidate)
                                 (length (car candidate)))
@@ -72,11 +72,11 @@ excluding the display string)."
                (concat (make-string (+ 5 (- max-length
                                             (length candidate)))
                                     ?\s)
-                       (funcall annotation-function
-                                (cdr (assoc-string candidate candidates))))))))
-    (cdr (assoc-string
-          (completing-read prompt candidates nil t)
-          candidates))))
+                       (cl-third (assoc-string candidate candidates)))))))
+    (cl-second
+     (assoc-string
+      (completing-read prompt candidates nil t)
+      candidates))))
 
 (provide 'opencode-common)
 ;;; opencode-common.el ends here

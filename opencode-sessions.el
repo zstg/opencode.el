@@ -41,6 +41,7 @@
     "g" nil
     "SPC" nil
     "n" 'opencode-new-session
+    "M" 'opencode-toggle-mcp
     "U" 'opencode-unshare-all-sessions
     "v" 'opencode-session-control-toggle-verbose))
 
@@ -66,6 +67,7 @@
     "C-c u" 'opencode-unshare-session
     "C-c U" 'opencode-unshare-all-sessions
     "C-c m" 'opencode-select-model
+    "C-c M" 'opencode-toggle-mcp
     "C-c F" 'opencode-fork-session
     "/" 'opencode-insert-slash-command))
 
@@ -126,10 +128,11 @@ Each element is (display-name . (provider-id provider-name model-id))."
     (dolist (provider opencode-providers)
       (let-alist provider
         (dolist (model-entry .models)
-          (let* ((model (cdr model-entry))
-                 (model-name (alist-get 'name model))
-                 (model-id (alist-get 'id model)))
-            (push (cons model-name (list .id .name model-id))
+          (let ((model (cdr model-entry)))
+            (push (list (alist-get 'name model)
+                        `((providerID . ,.id)
+                          (modelID . ,(alist-get 'id model)))
+                        .name)
                   result)))))
     (nreverse result)))
 
@@ -139,16 +142,12 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
   (interactive)
   (unless opencode-session-agent
     (user-error "not in a session"))
-  (when-let ((info (opencode--annotated-completion
-                    "Model: "
-                    (opencode--collect-all-models)
-                    (lambda (candidate)
-                      (cl-second candidate)))))
-    (let ((model `((providerID . ,(car info))
-                   (modelID . ,(caddr info)))))
-      (setf (alist-get 'model opencode-session-agent) model
-            opencode-session-model model)
-      (force-mode-line-update))))
+  (when-let ((model (opencode--annotated-completion
+                     "Model: "
+                     (opencode--collect-all-models))))
+    (setf (alist-get 'model opencode-session-agent) model
+          opencode-session-model model)
+    (force-mode-line-update)))
 
 (defun opencode-select-child-session ()
   "Open a child (subagent) session of the current session."
@@ -157,18 +156,15 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
       children
     (if children
         (opencode-open-session
-         (cl-first
-          (opencode--annotated-completion
-           "Subagent: "
-           (cl-loop for child in children
-                    collect (let-alist child
-                              (list .title
-                                    child
-                                    (seconds-to-string
-                                     (opencode--time-ago
-                                      child 'updated)))))
-           (lambda (candidate)
-             (cl-second candidate)))))
+         (opencode--annotated-completion
+          "Subagent: "
+          (cl-loop for child in children
+                   collect (let-alist child
+                             (list .title
+                                   child
+                                   (seconds-to-string
+                                    (opencode--time-ago
+                                     child 'updated)))))))
       (message "No children"))))
 
 (defun opencode-open-parent ()
@@ -213,17 +209,14 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
   "Insert an opencode slash command."
   (interactive)
   (if (= (point) (cdr comint-last-prompt))
-      (let ((command (cl-first
-                      (opencode--annotated-completion
-                       "Slash command: "
-                       (cl-loop for command in opencode-slash-commands
-                                collect (let-alist command
-                                          (list
-                                           .name
-                                           .name
-                                           .description)))
-                       (lambda (candidate)
-                         (cl-second candidate))))))
+      (let ((command (opencode--annotated-completion
+                      "Slash command: "
+                      (cl-loop for command in opencode-slash-commands
+                               collect (let-alist command
+                                         (list
+                                          .name
+                                          .name
+                                          .description))))))
         (insert (concat "/" command)))
     (call-interactively #'self-insert-command)))
 

@@ -186,7 +186,9 @@ body when it normally would (POST PATCH)."
      (tools-for-model "/experimental/tool?provider=%s&model=%s")
      "/lsp"
      "/formatter"
-     "/mcp"
+     (mcps "/mcp")
+     (post nodata enable-mcp "/mcp/%s/connect")
+     (post nodata disable-mcp "/mcp/%s/disconnect")
      (agents "/agent")
      (post nodata dispose-instance "/instance/dispose"))))
 

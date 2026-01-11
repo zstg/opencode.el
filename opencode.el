@@ -131,20 +131,17 @@ Then open an opencode session in it."
   (interactive)
   (opencode-api-projects projects
     (opencode-open-project
-     (cl-first
-      (opencode--annotated-completion
-       "Project: "
-       (cl-loop for project in projects
-                for worktree = (alist-get 'worktree project)
-                collect (list (string-remove-prefix
-                               (expand-file-name "~/")
-                               worktree)
-                              worktree
-                              (seconds-to-string
-                               (opencode--time-ago
-                                project 'updated))))
-       (lambda (candidate)
-         (cl-second candidate)))))))
+     (opencode--annotated-completion
+      "Project: "
+      (cl-loop for project in projects
+               for worktree = (alist-get 'worktree project)
+               collect (list (string-remove-prefix
+                              (expand-file-name "~/")
+                              worktree)
+                             worktree
+                             (seconds-to-string
+                              (opencode--time-ago
+                               project 'updated))))))))
 
 (defvar opencode-event-log-max-lines nil
   "Maximum number of lines to log in the opencode event log buffer.
@@ -267,6 +264,28 @@ Without it will use a default title and then automatically generate one."
                                  (make-hash-table))
       session
     (opencode-open-session session)))
+
+(defun opencode-toggle-mcp ()
+  "Completing read to select an MCP to toggle."
+  (interactive)
+  (opencode-api-mcps mcps
+    (let ((mcp (opencode--annotated-completion
+                "MCP: "
+                (cl-loop for mcp in mcps
+                         for (mcp-name . mcp-info) = mcp
+                         collect (list (symbol-name mcp-name)
+                                       mcp-name
+                                       (pcase (alist-get 'status mcp-info)
+                                         ("connected" "🟢 connected")
+                                         ("disabled" "🔴 disabled"
+                                          )))))))
+      (pcase (map-nested-elt mcps `(,mcp status))
+        ("connected" (opencode-api-disable-mcp (mcp)
+                         _res
+                       (message "Disabled %s" mcp)))
+        ("disabled" (opencode-api-enable-mcp (mcp)
+                        _res
+                      (message "Enabled %s" mcp)))))))
 
 (defun opencode-fork-session ()
   "Fork the current session from the message at point.
