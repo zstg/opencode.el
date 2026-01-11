@@ -67,6 +67,7 @@
     "C-c u" 'opencode-unshare-session
     "C-c U" 'opencode-unshare-all-sessions
     "C-c m" 'opencode-select-model
+    "C-c v" 'opencode-select-variant
     "C-c M" 'opencode-toggle-mcp
     "C-c F" 'opencode-fork-session
     "/" 'opencode-insert-slash-command))
@@ -94,6 +95,9 @@
 
 (defvar-local opencode-session-model nil
   "Currently selected model for session when agent doesn't have default model.")
+
+(defvar-local opencode-session-variant nil
+  "Currently selected model variant for session.")
 
 (defvar opencode-session-buffers
   (make-hash-table :test 'equal)
@@ -147,7 +151,34 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
                      (opencode--collect-all-models))))
     (setf (alist-get 'model opencode-session-agent) model
           opencode-session-model model)
-    (force-mode-line-update)))
+    (unless (alist-get opencode-session-variant
+                       (alist-get 'variants (opencode--current-model)))
+      (setf opencode-session-variant nil))))
+
+(defun opencode--current-model ()
+  "Return the active model for this session."
+  (let-alist opencode-session-agent
+    (map-nested-elt
+     (seq-find (lambda (provider)
+                 (string= .model.providerID (alist-get 'id provider)))
+               opencode-providers)
+     `(models ,(intern .model.modelID)))))
+
+(defun opencode-select-variant ()
+  "Select a variant for the current model."
+  (interactive)
+  (let ((variants (alist-get 'variants (opencode--current-model))))
+    (setq opencode-session-variant
+          (if variants
+              (opencode--annotated-completion
+               "Variant: "
+               (cl-loop for (variant . options) in
+                        variants
+                        collect (list (symbol-name variant)
+                                      variant
+                                      (format "%s" options))))
+            (message "No variants")
+            nil))))
 
 (defun opencode-select-child-session ()
   "Open a child (subagent) session of the current session."
@@ -226,11 +257,7 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
     (let* ((agent (pcase .name
                     ("Planner-Sisyphus" "Planner")
                     (name name)))
-           (model (map-nested-elt
-                   (seq-find (lambda (provider)
-                               (string= .model.providerID (alist-get 'id provider)))
-                             opencode-providers)
-                   `(models ,(intern .model.modelID))))
+           (model (opencode--current-model))
            (status (pcase opencode-session-status
                      ("busy" "⏳")
                      ("idle" "🚀")
@@ -240,7 +267,12 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
       (if (< (window-width) 115)
           (format "[🤖 %s] %.0f%%%% %s  " agent context-used status)
         (format "[🤖 %s - %s] %.0f%%%% %s  "
-                agent (alist-get 'name model) context-used status)))))
+                agent
+                (concat (alist-get 'name model)
+                        (when opencode-session-variant
+                          (propertize (format " %s" opencode-session-variant)
+                                      'face '(bold opencode-request-margin-highlight))))
+                context-used status)))))
 
 (defun opencode-session--set-status (session-id status)
   "Set STATUS for the session with SESSION-ID and update modeline."
@@ -377,6 +409,7 @@ Assign the overlay EXTRA-PROP with EXTRA-VALUE."
     (opencode-api-send-message (opencode-session-id)
         `((agent . ,(alist-get 'name opencode-session-agent))
           ,(assoc 'model opencode-session-agent)
+          (variant . ,(or opencode-session-variant ""))
           (parts . ,(nreverse
                      (cons `((type . text) (text . ,string))
                            opencode--extra-parts))))
