@@ -620,7 +620,7 @@ Assign the overlay EXTRA-PROP with EXTRA-VALUE."
            (format "glob \"%s\" in %s\n\n"
                    .pattern
                    (file-relative-name .path default-directory))
-         (format "glob \"%s\"" .pattern)))
+         (format "glob \"%s\"\n\n" .pattern)))
       ("todowrite"
        (concat (opencode--render-todos .todos) "\n\n"))
       (_ (if (= 1 (length input))
