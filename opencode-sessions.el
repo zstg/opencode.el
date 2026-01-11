@@ -125,16 +125,28 @@
     (opencode--set-agent (or next (car opencode-agents))))
   (force-mode-line-update))
 
+(defun opencode--session-buffer-p (buf)
+  "Return non-nil if BUF is a opencode session buffer.
+Accepts (\"name\" . buffer) to work as a read-buffer predicate."
+  (with-current-buffer (cl-etypecase buf
+                         ((or string buffer) buf)
+                         (list (cdr buf)))
+    opencode-session-id))
+
 (defun opencode-select-session ()
   "Select among open session buffers."
   (interactive)
   (switch-to-buffer
-   (read-buffer "Switch to: " nil t
-                (lambda (buf)
-                  (with-current-buffer (if (stringp buf)
-                                           buf
-                                         (cdr buf))
-                    opencode-session-id)))))
+   (read-buffer "Switch to: " nil t 'opencode--session-buffer-p)))
+
+(defun opencode-consult-sessions ()
+  "Run `consult-line-multi' across all open opencode sessions."
+  (interactive)
+  (if (require 'consult nil t)
+      (progn
+        (declare-function consult-line-multi "consult")
+        (consult-line-multi '(:predicate opencode--session-buffer-p)))
+    (user-error "This requires consult")))
 
 (defun opencode--collect-all-models ()
   "Collect all models from `opencode-providers' as a list.
