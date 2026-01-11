@@ -81,6 +81,9 @@
 (defvar-local opencode-session-id nil
   "Session id for the current opencode session buffer.")
 
+(defvar-local opencode-session-tokens 0
+  "Tokens consumed by the current session.")
+
 (defvar-local opencode-session-status "idle"
   "Status of the current opencode session (busy or idle).")
 
@@ -227,21 +230,24 @@ Creates a new copy of the agent to avoid mutating `opencode-agents'."
 (defun opencode--session-status-indicator ()
   "Return mode line indicator for session status."
   (let-alist opencode-session-agent
-    (let ((agent (pcase .name
-                   ("Planner-Sisyphus" "Planner")
-                   (name name)))
-          (model (map-nested-elt
-                  (seq-find (lambda (provider)
-                              (string= .model.providerID (alist-get 'id provider)))
-                            opencode-providers)
-                  `(models ,(intern .model.modelID) name)))
-          (status (pcase opencode-session-status
-                    ("busy" "⏳")
-                    ("idle" "🚀")
-                    (_ ""))))
+    (let* ((agent (pcase .name
+                    ("Planner-Sisyphus" "Planner")
+                    (name name)))
+           (model (map-nested-elt
+                   (seq-find (lambda (provider)
+                               (string= .model.providerID (alist-get 'id provider)))
+                             opencode-providers)
+                   `(models ,(intern .model.modelID))))
+           (status (pcase opencode-session-status
+                     ("busy" "⏳")
+                     ("idle" "🚀")
+                     (_ "")))
+           (context-used (* 100 (/ (float opencode-session-tokens)
+                                   (map-nested-elt model '(limit context))))))
       (if (< (window-width) 115)
-          (format "[🤖 %s] %s  " agent status)
-        (format "[🤖 %s - %s] %s  " agent model status)))))
+          (format "[🤖 %s] %.0f%%%% %s  " agent context-used status)
+        (format "[🤖 %s - %s] %.0f%%%% %s  "
+                agent (alist-get 'name model) context-used status)))))
 
 (defun opencode-session--set-status (session-id status)
   "Set STATUS for the session with SESSION-ID and update modeline."
@@ -389,6 +395,13 @@ Assign the overlay EXTRA-PROP with EXTRA-VALUE."
   (let-alist info
     (pcase .role
       ("assistant"
+       (when .time.completed
+         (when-let (buffer (map-elt opencode-session-buffers .sessionID))
+           (with-current-buffer buffer
+             (setq opencode-session-tokens
+                   (+ .tokens.input .tokens.output .tokens.reasoning
+                      .tokens.cache.read .tokens.cache.write))
+             (force-mode-line-update))))
        (if (or .finish .error)
            (setf opencode-assistant-messages
                  (assoc-delete-all .id opencode-assistant-messages))
@@ -691,15 +704,19 @@ Assign the overlay EXTRA-PROP with EXTRA-VALUE."
                 (let-alist (alist-get 'info message)
                   (pcase .role
                     ("user" (opencode--replay-user-request message))
-                    ("assistant" (dolist (part (alist-get 'parts message))
-                                   (let-alist part
-                                     (let ((text (opencode--render-markdown (concat .text "\n\n"))))
-                                       (pcase .type
-                                         ("text" (opencode--output text))
-                                         ("tool" (opencode--insert-tool-block .tool .state.input))
-                                         ("reasoning"
-                                          (opencode--insert-reasoning-block
-                                           text))))))))))
+                    ("assistant"
+                     (dolist (part (alist-get 'parts message))
+                       (let-alist part
+                         (let ((text (opencode--render-markdown (concat .text "\n\n"))))
+                           (pcase .type
+                             ("text" (opencode--output text))
+                             ("tool" (opencode--insert-tool-block .tool .state.input))
+                             ("reasoning"
+                              (opencode--insert-reasoning-block
+                               text))))))
+                     (setq opencode-session-tokens
+                           (+ .tokens.input .tokens.output .tokens.reasoning
+                              .tokens.cache.read .tokens.cache.write))))))
               (opencode--show-prompt)))
           (pop-to-buffer buffer))))))
 
