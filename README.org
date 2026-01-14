@@ -95,20 +95,20 @@ Here you see a table view with information on all sessions for a given project.
 
 Shortcuts to act on the session at point:
 
-|   <c>    |                                                                                             |
 |   Key    | Description                                                                                 |
 |----------+---------------------------------------------------------------------------------------------|
+|   <c>    |                                                                                             |
 |    =x=     | kill session                                                                                |
 |    =R=     | rename session                                                                              |
 |    =s=     | share session, copies a URL to the clipboard that will give a read-only view of the session |
 |    =u=     | unshare session                                                                             |
-| =RET= or =o= | foo                                                                                         |
+| =RET= or =o= | open the session                                                                            |
 
 Buffer-wide shortcuts:
 
-| <c> |                                                    |
 | Key | Description                                        |
 |-----+----------------------------------------------------|
+| <c> |                                                    |
 |  =n=  | new session                                        |
 |  =M=  | toggle MCP - fuzzy completes on all available MCPs |
 |  =U=  | unshare all shared sessions for this project       |
@@ -118,23 +118,23 @@ Buffer-wide shortcuts:
 [[file:screenshots/session.png]]
 [[file:screenshots/session_with_diff.png]]
 
-This is what a session buffer looks like. In the modeline at the bottom right we
+This is what session buffers look like. In the modeline at the bottom right we
 see the current agent, current model, model variant if one is selected (like
 low/medium/high thinking level), the percent of context used up so far, and an
 indicator for if the session is idle or busy. User prompts are shown with a blue
 margin highlight, information about tool calls in green, and reasoning in brown.
 These colors can be configured through the =opencode-*-margin-highlight= faces.
 
-|   <c>   |                                                                                                                            |
 |   Key   | Description                                                                                                                |
 |---------+----------------------------------------------------------------------------------------------------------------------------|
+|   <c>   |                                                                                                                            |
 | =C-c C-y= | yank code block at point                                                                                                   |
 | =C-c C-c= | cancel the current request                                                                                                 |
 |  =C-c x=  | delete this session                                                                                                        |
 |   =TAB=   | cycle through available primary agents                                                                                     |
 |  =C-c r=  | rename this session                                                                                                        |
 |  =C-c n=  | start a new session in the same project                                                                                    |
-|  =C-c c=  | fuzzy select a child session to open, children are all subagent  sessions spawned by this session                          |
+|  =C-c c=  | fuzzy select a child session to open - children are all subagent  sessions spawned by this session                         |
 |  =C-c p=  | open parent session - when in a subagent session, open the session that spawned it                                         |
 |  =C-c f=  | select a file to add to context                                                                                            |
 |  =C-c b=  | select a buffer to add to context                                                                                          |
@@ -158,21 +158,21 @@ If a session buffer and frame is not active, emacs will show a notification when
                           opencode-new-worktree opencode-new-session
                           opencode-select-idle opencode-visit-last-idle)
          collect (list command
-                       (car (string-lines (documentation command)))))
+                       (string-join (string-lines (documentation command)) " ")))
 #+end_src
 
 #+RESULTS:
-| Command                  | Description                                                              |
-|--------------------------+--------------------------------------------------------------------------|
-| opencode                 | Open opencode sessions control buffer for the current project directory. |
-| opencode-connect         | Connect to opencode server, prompting for HOST and PORT.                 |
-| opencode-disconnect      | Disconnect from opencode server, optionally log EVENT.                   |
-| opencode-select-project  | Completing read to prompt which project to select.                       |
-| opencode-select-session  | Select among open session buffers.                                       |
-| opencode-new-worktree    | Create a new git branch, and worktree prompting for a name.              |
-| opencode-new-session     | Create a new session. With a prefix argument it will ask for TITLE.      |
-| opencode-select-idle     | Select a session that hasn’t been visited since it went idle.            |
-| opencode-visit-last-idle | Open the most recent session to notify as idle.                          |
+| Command                  | Description                                                                                                                                  |
+|--------------------------+----------------------------------------------------------------------------------------------------------------------------------------------|
+| opencode                 | Open opencode sessions control buffer for the current project directory.                                                                     |
+| opencode-connect         | Connect to opencode server, prompting for HOST and PORT.                                                                                     |
+| opencode-disconnect      | Disconnect from opencode server, optionally log EVENT.                                                                                       |
+| opencode-select-project  | Completing read to prompt which project to select.                                                                                           |
+| opencode-select-session  | Select among open session buffers.                                                                                                           |
+| opencode-new-worktree    | Create a new git branch, and worktree prompting for a name. Then open an opencode session in it.                                             |
+| opencode-new-session     | Create a new session. With a prefix argument it will ask for TITLE. Without it will use a default title and then automatically generate one. |
+| opencode-select-idle     | Select a session that hasn’t been visited since it went idle.                                                                                |
+| opencode-visit-last-idle | Open the most recent session to notify as idle.                                                                                              |
 
 * Configuration
 - Set =opencode-default-model= for the default model to use when the selected agent doesn't have a default model. The default setting is:
