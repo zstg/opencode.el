@@ -279,8 +279,7 @@ Without it will use a default title and then automatically generate one."
                                        mcp-name
                                        (pcase (alist-get 'status mcp-info)
                                          ("connected" "🟢 connected")
-                                         ("disabled" "🔴 disabled"
-                                          )))))))
+                                         ("disabled" "🔴 disabled")))))))
       (pcase (map-nested-elt mcps `(,mcp status))
         ("connected" (opencode-api-disable-mcp (mcp)
                          _res
