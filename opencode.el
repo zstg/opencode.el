@@ -84,10 +84,9 @@ When nil, `opencode' will only connect to an already running server."
 
 (defun opencode--server-running-p ()
   "Return non-nil if an opencode server is running at configured host and port."
-  (condition-case nil
-      (plz 'get (format "http://%s:%d/global/health" opencode-host opencode-port)
-        :timeout 1)
-    (error nil)))
+  (ignore-errors
+    (plz 'get (format "http://%s:%d/global/health" opencode-host opencode-port)
+      :timeout 1)))
 
 (defun opencode--serve-command ()
   "Return the command to start the opencode server."
@@ -115,20 +114,19 @@ When nil, `opencode' will only connect to an already running server."
 Connects to an existing server if one is running, otherwise starts a new one
 if `opencode-auto-start-server' is non-nil."
   (interactive)
-  (let ((project-dir (directory-file-name
-                      (if-let (proj (project-current))
-                          (project-root proj)
-                        default-directory))))
+  (let ((project-dir (if-let (proj (project-current))
+                         (project-root proj)
+                       default-directory)))
     (cond
      ;; Already connected
      (opencode--event-subscriptions
       (opencode-open-project project-dir))
+     ;; We started a server process that's still alive
+     ((process-live-p opencode--process)
+      (opencode-open-project project-dir))
      ;; Server already running externally
      ((opencode--server-running-p)
       (opencode-connect opencode-host opencode-port)
-      (opencode-open-project project-dir))
-     ;; We started a server process that's still alive
-     ((process-live-p opencode--process)
       (opencode-open-project project-dir))
      ;; Need to start a new server
      (opencode-auto-start-server
