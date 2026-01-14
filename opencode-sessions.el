@@ -70,6 +70,7 @@
     "C-c v" 'opencode-select-variant
     "C-c M" 'opencode-toggle-mcp
     "C-c F" 'opencode-fork-session
+    "C-c R" 'opencode-revert-message
     "/" 'opencode-insert-slash-command))
 
 (with-eval-after-load 'evil
@@ -809,6 +810,20 @@ Returns nil if point is before the first prompt."
       (cl-loop do (comint-next-prompt 1)
                while (< (point) target-point)
                count t))))
+
+(defmacro opencode--current-message-id (result &rest body)
+  "Run BODY with RESULT as the message id of the user message at point."
+  (declare (indent defun))
+  `(when-let (message-number (opencode--current-message-number))
+     (opencode-api-session-messages (opencode-session-id)
+         messages
+       ;; Filter to only user messages, then get the Nth one
+       (let* ((user-messages (seq-filter (lambda (msg)
+                                           (string= "user" (map-nested-elt msg '(info role))))
+                                         messages))
+              (message (nth message-number user-messages)))
+         (let ((,result (map-nested-elt message '(info id))))
+           ,@body)))))
 
 (defun opencode-rename-session (&optional session)
   "Rename SESSION. If in a session buffer, rename that session."

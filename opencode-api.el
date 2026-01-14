@@ -171,6 +171,8 @@ body when it normally would (POST PATCH)."
      (post nodata abort-session "/session/%s/abort")
      (delete delete-session "/session/%s")
      (post fork-session "/session/%s/fork")
+     (post revert-message "/session/%s/revert")
+     (post nodata unrevert-all "/session/%s/unrevert")
      (post respond-permission-request "/session/%s/permissions/%s")
      (post nodata share-session "/session/%s/share")
      (delete unshare-session "/session/%s/share")

@@ -295,23 +295,40 @@ If point is before the first prompt, creates a new session instead."
   (interactive)
   (unless opencode-session-id
     (user-error "Not in an opencode session buffer"))
-  (if-let (message-number (opencode--current-message-number))
-      (opencode-api-session-messages (opencode-session-id)
-          messages
-        ;; Filter to only user messages, then get the Nth one
-        (let* ((user-messages (seq-filter (lambda (msg)
-                                            (string= "user" (map-nested-elt msg '(info role))))
-                                          messages))
-               (message (nth message-number user-messages)))
-          (if message
-              (let ((message-id (map-nested-elt message '(info id))))
-                (opencode-api-fork-session (opencode-session-id)
-                    `((messageID . ,message-id))
-                    session
-                  (opencode-open-session session)))
-            (user-error "No user message found at position %d" message-number))))
-    ;; if before the first prompt just open a new session
-    (opencode-new-session)))
+  (opencode--current-message-id message-id
+    (if message-id
+        (opencode-api-fork-session (opencode-session-id)
+            `((messageID . ,message-id))
+            session
+          (opencode-open-session session))
+      ;; if before the first prompt just open a new session
+      (opencode-new-session))))
+
+(defun opencode-revert-message ()
+  "Select a message to revert in the current session."
+  (interactive)
+  (unless opencode-session-id
+    (user-error "Not in an opencode session buffer"))
+  (opencode--current-message-id message-id
+    (if message-id
+        (opencode-api-revert-message (opencode-session-id)
+            `((messageID . ,message-id))
+            result
+          (message
+           (if result
+               "Reverted edits after message"
+             "Failed to revert message")))
+      (user-error "No user message at point"))))
+
+(defun opencode-unrevert-all ()
+  "Unrevert all reverted messages in the current session."
+  (interactive)
+  (opencode-api-unrevert-all (opencode-session-id)
+      result
+    (message
+     (if result
+         "Restored all edits in session"
+       "Failed to restore edits"))))
 
 (defun opencode-process-events (directory)
   "Connect to the opencode event stream and process all events for DIRECTORY."
