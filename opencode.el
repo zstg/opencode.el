@@ -122,9 +122,10 @@
 Then open an opencode session in it."
   (interactive)
   (let* ((name (read-string "Worktree and branch name: "))
-         (default-directory (file-name-concat opencode-worktree-directory name)))
-    (magit-worktree-branch default-directory name "HEAD")
-    (opencode-new-session)))
+         (directory (file-name-concat opencode-worktree-directory name)))
+    (when (magit-worktree-branch directory name "HEAD")
+      (let ((default-directory directory))
+        (opencode-new-session)))))
 
 (defun opencode-select-project ()
   "Completing read to prompt which project to select."
