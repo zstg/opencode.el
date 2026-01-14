@@ -1,6 +1,39 @@
-Emacs frontend to opencode
+#+TITLE: Emacs OpenCode UI
+#+OPTIONS: toc:nil
+
+An emacs UI to [[https://opencode.ai/][opencode]] - an open source AI coding agent. This provides two sets
+of advantages over the official TUI:
+
+1) A better TUI and GUI
+
+   #+begin_verse
+   Emacs is a mature TUI and GUI framework, that while janky in its own way, is
+   far less janky than the TUIs the new agentic coding tools have written from
+   scratch. This package builds on a solid foundation of [[https://www.emacswiki.org/emacs/ComintMode][comint]], [[https://www.gnu.org/software/emacs/manual/html_mono/vtable.html][vtable]],
+   [[https://www.gnu.org/software/emacs/manual/html_node/emacs/Diff-Mode.html][diff-mode]], [[https://jblevins.org/projects/markdown-mode/][markdown-mode]], emacs' completion system, and more, to offer a
+   (IMO) nicer UI. Also if you're an emacs user, the UI is more consistent: goto
+   next or previous prompt, =comint-kill-output-to-kill-ring=, and everything else
+   works the same as in any other repl or shell based on comint mode, completion
+   and filtering works the same as everywhere else in emacs, and everything is
+   just a text buffer where all your usual editing and other commands work as
+   expected.
+   #+end_verse
+
+2) Emacs integration
+
+   - add any emacs buffer to chat context with =opencode-add-buffer=
+   - integration with magit is possible, =opencode-new-worktree= will create a new
+     git branch and worktree for the current project, and start an opencode session in it
+   - use =dabbrev-expand= in the chat window to complete long variable or function
+     names from your code buffers
+
+   Not much so far, but my initial focus has just been to make a usable UI,
+   while deeper emacs integration will come over time.
 
 * Installation
+When this package is a bit more stable I'll package it on MELPA, for now install
+from git. This package depends on [[https://github.com/magit/magit][magit]], [[https://github.com/alphapapa/plz.el][plz]], and [[https://jblevins.org/projects/markdown-mode/][markdown-mode]].
+** Manual
 
 Clone this repository and add it to your load path.
 
@@ -8,12 +41,144 @@ Clone this repository and add it to your load path.
 (add-to-list 'load-path "/path/to/opencode.el")
 (require 'opencode)
 #+END_SRC
+** With straight.el
+#+begin_src emacs-lisp
+(use-package opencode
+  :straight (opencode :type git :host codeberg :repo "sczi/opencode.el"))
+#+end_src
+** In Doom Emacs
+add to =packages.el= and run =doom sync=
+#+begin_src emacs-lisp
+(package! opencode
+  :recipe (:host codeberg :repo "sczi/opencode.el"))
+#+end_src
 
-* Usage
+* Connecting
+** Automatic
+=M-x opencode= will start a headless opencode server with =opencode serve= if one
+isn't already running, and then open a [[#6679896c-5b9d-4e87-9e03-6ed060dec278][Session Management]] buffer for the current
+project.
+** Manual
+=M-x opencode-connect= will prompt for the host and port of an opencode server to
+connect to.
+* Security
+This uses opencode's HTTP server, which gives an attacker who finds an [[https://owasp.org/www-community/attacks/xss/][XSS]] in
+any =*.opencode.ai= domain [[https://cy.md/opencode-rce/][code execution in your opencode process]] when you visit
+the attacker's website or click a link. Also opencode's permission system,
+especially for bash, is not nearly as fine-grained as claude's. However, I don't
+think this really matters. Any coding agent with the ability to write and
+execute code can execute potentially malicious code by design and should be
+untrusted. One approach I'd recommend is to develop inside virtual machines or
+at least unprivileged containers managed by [[https://linuxcontainers.org/incus/][incus]]. If you use btrfs or ZFS for
+your incus storage pool, then =incus copy= is almost instant. So you can have a VM
+with emacs and opencode and your project, but without secrets or sensitive data,
+and spawn a copy to do agent-assisted development in. When you finish, push the
+changes to a git repo in a shared folder, and delete the VM. If you only need
+one copy at a time, you can just snapshot and restore rather than creating and
+deleting copies. Then from your somewhat more secure and non AI-infected
+development environment, review and then pull the changes from the shared
+folder.
+* Project Management
+In opencode, sessions are grouped by project, where each git repository is a
+different project. Different git worktrees for the same repository will be
+grouped in the same project. Sessions started in directories outside of any git
+repository will go in the global =/= project. =opencode-select-project= will fuzzy
+complete on all projects and open the [[#6679896c-5b9d-4e87-9e03-6ed060dec278][Session Management]] buffer for the project
+you select.
+* Session Management
+:PROPERTIES:
+:CUSTOM_ID:       6679896c-5b9d-4e87-9e03-6ed060dec278
+:END:
+[[file:screenshots/session_management.png]]
 
-** Connecting to an OpenCode Server
+Here you see a table view with information on all sessions for a given project.
 
-Run ~M-x opencode~ to connect to an OpenCode server.
+Shortcuts to act on the session at point:
 
-By default, it connects to ~localhost:4096~.
-To specify a different host or port, use a prefix argument: ~C-u M-x opencode~.
+|   <c>    |                                                                                             |
+|   Key    | Description                                                                                 |
+|----------+---------------------------------------------------------------------------------------------|
+|    =x=     | kill session                                                                                |
+|    =R=     | rename session                                                                              |
+|    =s=     | share session, copies a URL to the clipboard that will give a read-only view of the session |
+|    =u=     | unshare session                                                                             |
+| =RET= or =o= | foo                                                                                         |
+
+Buffer-wide shortcuts:
+
+| <c> |                                                    |
+| Key | Description                                        |
+|-----+----------------------------------------------------|
+|  =n=  | new session                                        |
+|  =M=  | toggle MCP - fuzzy completes on all available MCPs |
+|  =U=  | unshare all shared sessions for this project       |
+|  =v=  | toggle verbose - whether to show subagent sessions |
+
+* Chat Sessions
+[[file:screenshots/session.png]]
+[[file:screenshots/session_with_diff.png]]
+
+This is what a session buffer looks like. In the modeline at the bottom right we
+see the current agent, current model, model variant if one is selected (like
+low/medium/high thinking level), the percent of context used up so far, and an
+indicator for if the session is idle or busy. User prompts are shown with a blue
+margin highlight, information about tool calls in green, and reasoning in brown.
+These colors can be configured through the =opencode-*-margin-highlight= faces.
+
+|   <c>   |                                                                                                                            |
+|   Key   | Description                                                                                                                |
+|---------+----------------------------------------------------------------------------------------------------------------------------|
+| =C-c C-y= | yank code block at point                                                                                                   |
+| =C-c C-c= | cancel the current request                                                                                                 |
+|  =C-c x=  | delete this session                                                                                                        |
+|   =TAB=   | cycle through available primary agents                                                                                     |
+|  =C-c r=  | rename this session                                                                                                        |
+|  =C-c n=  | start a new session in the same project                                                                                    |
+|  =C-c c=  | fuzzy select a child session to open, children are all subagent  sessions spawned by this session                          |
+|  =C-c p=  | open parent session - when in a subagent session, open the session that spawned it                                         |
+|  =C-c f=  | select a file to add to context                                                                                            |
+|  =C-c b=  | select a buffer to add to context                                                                                          |
+|  =C-c s=  | share session - copy a URL to the clipboard with a read-only view of the session                                           |
+|  =C-c u=  | unshare session                                                                                                            |
+|  =C-c U=  | unshare all sessions                                                                                                       |
+|  =C-c m=  | select model                                                                                                               |
+|  =C-c v=  | select model variant                                                                                                       |
+|  =C-c M=  | select an MCP to toggle                                                                                                    |
+|  =C-c F=  | fork session from message at point - use this when a model responds badly to avoid polluting context with the bad response |
+|  =C-c R=  | revert all edits done by this session after the message at point                                                           |
+|    =/=    | when at the start of a user prompt, select a slash command to run                                                          |
+
+* Notifications
+If a session buffer and frame is not active, emacs will show a notification when that session's response has finished, so that you can go work on other stuff and be notified when the agent has finished.
+
+* Commands
+#+begin_src emacs-lisp :results table :colnames '("Command" "Description") :exports results
+(cl-loop for command in '(opencode opencode-connect opencode-disconnect
+                          opencode-select-project opencode-select-session
+                          opencode-new-worktree opencode-new-session
+                          opencode-select-idle opencode-visit-last-idle)
+         collect (list command
+                       (car (string-lines (documentation command)))))
+#+end_src
+
+#+RESULTS:
+| Command                  | Description                                                              |
+|--------------------------+--------------------------------------------------------------------------|
+| opencode                 | Open opencode sessions control buffer for the current project directory. |
+| opencode-connect         | Connect to opencode server, prompting for HOST and PORT.                 |
+| opencode-disconnect      | Disconnect from opencode server, optionally log EVENT.                   |
+| opencode-select-project  | Completing read to prompt which project to select.                       |
+| opencode-select-session  | Select among open session buffers.                                       |
+| opencode-new-worktree    | Create a new git branch, and worktree prompting for a name.              |
+| opencode-new-session     | Create a new session. With a prefix argument it will ask for TITLE.      |
+| opencode-select-idle     | Select a session that hasn’t been visited since it went idle.            |
+| opencode-visit-last-idle | Open the most recent session to notify as idle.                          |
+
+* Configuration
+- Set =opencode-default-model= for the default model to use when the selected agent doesn't have a default model. The default setting is:
+#+begin_src emacs-lisp
+((providerID . "opencode")
+ (modelID . "big-pickle"))
+#+end_src
+- =opencode-host= and =opencode-port= are the default host and port to use with =M-x opencode-connect=
+- the =opencode-faces= group configures faces used when displaying sessions
