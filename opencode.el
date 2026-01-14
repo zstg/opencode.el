@@ -56,30 +56,85 @@
   :type 'integer
   :group 'opencode)
 
+(defcustom opencode-command "opencode"
+  "Base command for the opencode executable.
+Used when `opencode-serve-command' is nil to construct the serve command."
+  :type 'string
+  :group 'opencode)
+
+(defcustom opencode-serve-command nil
+  "Full command to start the opencode server.
+When nil, the command is constructed from `opencode-command',
+`opencode-host', and `opencode-port'.
+
+Set this to a custom command for special cases like nix:
+  \"nix run github:numtide/nix-ai-tools#opencode -- serve --port 4096 --hostname localhost\""
+  :type '(choice (const :tag "Construct from opencode-command" nil)
+                 (string :tag "Custom command"))
+  :group 'opencode)
+
+(defcustom opencode-auto-start-server t
+  "Whether to automatically start a server if none is running.
+When nil, `opencode' will only connect to an already running server."
+  :type 'boolean
+  :group 'opencode)
+
 (defvar opencode--process nil
   "Opencode server process when started by Emacs.")
 
+(defun opencode--server-running-p ()
+  "Return non-nil if an opencode server is running at configured host and port."
+  (ignore-errors
+    (plz 'get (format "http://%s:%d/global/health" opencode-host opencode-port)
+      :timeout 1)))
+
+(defun opencode--serve-command ()
+  "Return the command to start the opencode server."
+  (or opencode-serve-command
+      (format "%s serve --port %d --hostname %s"
+              opencode-command opencode-port opencode-host)))
+
+(defun opencode--start-server (project-dir)
+  "Start an opencode server and open PROJECT-DIR when ready."
+  (setf opencode--process (start-process-shell-command
+                           "opencode" "*opencode-serve*"
+                           (opencode--serve-command)))
+  (set-process-filter
+   opencode--process
+   (lambda (process output)
+     (when (string-prefix-p "opencode server listening on" output)
+       ;; Remove filter to avoid repeated callbacks
+       (set-process-filter process nil)
+       (opencode-connect opencode-host opencode-port)
+       (opencode-open-project project-dir)))))
+
 ;;;###autoload
 (defun opencode ()
-  "Open opencode sessions control buffer for the current project directory."
+  "Open opencode sessions control buffer for the current project directory.
+Connects to an existing server if one is running, otherwise starts a new one
+if `opencode-auto-start-server' is non-nil."
   (interactive)
-  (let ((project-dir (when-let (proj (project-current))
-                       (directory-file-name (project-root proj)))))
-    (if (or opencode--event-subscriptions
-            (process-live-p opencode--process))
-        (opencode-open-project project-dir)
-      (setf opencode--process (start-process "opencode" "*opencode-serve*"
-                                             "opencode" "serve"
-                                             "--port" (number-to-string opencode-port)
-                                             "--hostname" opencode-host))
-      (set-process-filter
-       opencode--process
-       (lambda (process output)
-         (when (string-prefix-p "opencode server listening on" output)
-           ;; Remove filter to avoid repeated callbacks
-           (set-process-filter process nil)
-           (opencode-connect opencode-host opencode-port)
-           (opencode-open-project project-dir)))))))
+  (let ((project-dir (if-let (proj (project-current))
+                         (project-root proj)
+                       default-directory)))
+    (cond
+     ;; Already connected
+     (opencode--event-subscriptions
+      (opencode-open-project project-dir))
+     ;; We started a server process that's still alive
+     ((process-live-p opencode--process)
+      (opencode-open-project project-dir))
+     ;; Server already running externally
+     ((opencode--server-running-p)
+      (opencode-connect opencode-host opencode-port)
+      (opencode-open-project project-dir))
+     ;; Need to start a new server
+     (opencode-auto-start-server
+      (opencode--start-server project-dir))
+     ;; Auto-start disabled, no server running
+     (t
+      (user-error "No opencode server running at %s:%d (auto-start disabled)"
+                  opencode-host opencode-port)))))
 
 (defun opencode-connect (host port)
   "Connect to opencode server, prompting for HOST and PORT."
@@ -98,6 +153,7 @@
 
 (defun opencode-open-project (directory)
   "Open sessions control buffer for DIRECTORY."
+  (setq directory (file-name-as-directory directory))
   (opencode-process-events directory)
   (let ((buffer-name (format "*OpenCode Sessions in %s*" directory)))
     (unless (get-buffer buffer-name)
