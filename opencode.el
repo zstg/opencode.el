@@ -122,7 +122,6 @@ When nil, `opencode' will only connect to an already running server."
        (opencode-connect opencode-host opencode-port)
        (opencode-open-project project-dir)))))
 
-;;;###autoload
 (defun opencode ()
   "Open opencode sessions control buffer for the current project directory.
 Connects to an existing server if one is running, otherwise starts a new one
