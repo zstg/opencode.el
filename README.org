@@ -62,6 +62,7 @@ project.
 ** Manual
 =M-x opencode-connect= will prompt for the host and port of an opencode server to
 connect to.
+
 * Project Management
 In opencode, sessions are grouped by project, where each git repository is a
 different project. Different git worktrees for the same repository will be
@@ -69,6 +70,7 @@ grouped in the same project. Sessions started in directories outside of any git
 repository will go in the global =/= project. =opencode-select-project= will fuzzy
 complete on all projects and open the [[#6679896c-5b9d-4e87-9e03-6ed060dec278][Session Management]] buffer for the project
 you select.
+
 * Session Management
 :PROPERTIES:
 :CUSTOM_ID:       6679896c-5b9d-4e87-9e03-6ed060dec278
@@ -158,6 +160,21 @@ If a session buffer and frame is not active, emacs will show a notification when
 | opencode-select-idle     | Select a session that hasn’t been visited since it went idle.                                                                                |
 | opencode-visit-last-idle | Open the most recent session to notify as idle.                                                                                              |
 
+* Security
+Opencode's permission system, especially for bash, is not nearly as fine-grained
+as claude's. However, I don't think this really matters. Any coding agent with
+the ability to write and execute code can execute potentially malicious code by
+design and should be untrusted. One approach I'd recommend is to develop inside
+virtual machines or at least unprivileged containers managed by [[https://linuxcontainers.org/incus/][incus]]. If you
+use btrfs or ZFS for your incus storage pool, then =incus copy= is almost instant.
+So you can have a VM with emacs and opencode and your project, but without
+secrets or sensitive data, and spawn a copy to do agent-assisted development in.
+When you finish, push the changes to a git repo in a shared folder, and delete
+the VM. If you only need one copy at a time, you can just snapshot and restore
+rather than creating and deleting copies. Then from your somewhat more secure
+and non AI-infected development environment, review and then pull the changes
+from the shared folder.
+
 * Configuration
 - Set =opencode-default-model= for the default model to use when the selected agent doesn't have a default model. The default setting is:
 #+begin_src emacs-lisp
@@ -167,4 +184,5 @@ If a session buffer and frame is not active, emacs will show a notification when
 - =opencode-command= and =opencode-serve-command= can be used to configure how to
   run a headless opencode server
 - =opencode-host= and =opencode-port= are the default host and port to use with =M-x opencode-connect=
+- =opencode-server-username= and =opencode-server-password= configure how to authenticate to the opencode server
 - the =opencode-faces= group configures faces used when displaying sessions

@@ -54,6 +54,16 @@
 (defvar opencode--session-control-buffers nil
   "An alist mapping of projectIDs to session control buffers for that project.")
 
+(defcustom opencode-server-username "opencode"
+  "Username to connect to opencode server."
+  :type 'string
+  :group 'opencode)
+
+(defcustom opencode-server-password nil
+  "Password to connect to opencode server."
+  :type 'string
+  :group 'opencode)
+
 (defun opencode--time-ago (opencode-object type)
   "Return .time.TYPE value from OPENCODE-OBJECT, as seconds ago."
   (- (float-time)

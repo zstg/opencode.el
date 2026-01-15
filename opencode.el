@@ -86,6 +86,7 @@ When nil, `opencode' will only connect to an already running server."
   "Return non-nil if an opencode server is running at configured host and port."
   (ignore-errors
     (plz 'get (format "http://%s:%d/global/health" opencode-host opencode-port)
+      :headers (list (opencode--auth-header))
       :timeout 1)))
 
 (defun opencode--serve-command ()
@@ -96,9 +97,22 @@ When nil, `opencode' will only connect to an already running server."
 
 (defun opencode--start-server (project-dir)
   "Start an opencode server and open PROJECT-DIR when ready."
-  (setf opencode--process (start-process-shell-command
-                           "opencode" "*opencode-serve*"
-                           (opencode--serve-command)))
+  (setf opencode-server-password
+        (or opencode-server-password
+            (let ((chars "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"))
+              (apply #'string
+                     (cl-loop repeat 32
+                              collect (aref chars (random (length chars))))))))
+  (setf opencode--process
+        (let ((process-environment (cl-list*
+                                    (format "OPENCODE_SERVER_USERNAME=%s"
+                                            opencode-server-username)
+                                    (format "OPENCODE_SERVER_PASSWORD=%s"
+                                            opencode-server-password)
+                                    process-environment)))
+          (start-process-shell-command
+           "opencode" "*opencode-serve*"
+           (opencode--serve-command))))
   (set-process-filter
    opencode--process
    (lambda (process output)
@@ -401,7 +415,8 @@ If point is before the first prompt, creates a new session instead."
                                                  (let ((default-directory directory))
                                                    (opencode--handle-message event))))
                                    (close . opencode-disconnect))))))
-             :headers `(("x-opencode-directory" . ,directory))
+             :headers `(("x-opencode-directory" . ,directory)
+                        ,(opencode--auth-header))
              :then 'opencode-disconnect
              :else 'opencode-disconnect)))
       (set-process-query-on-exit-flag process nil)

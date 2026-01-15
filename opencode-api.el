@@ -24,6 +24,7 @@
 
 ;;; Code:
 
+(require 'opencode-common)
 (require 'plz)
 (require 'json)
 
@@ -33,6 +34,14 @@
 (defvar opencode-api-log-max-lines nil
   "Maximum number of lines of opencode api requests and responses to log.
 Or nil (default) to turn off logging.")
+
+(defun opencode--auth-header ()
+  "Return auth header based on `opencode-server-username' and `opencode-server-password'."
+  (when opencode-server-password
+    (cons "Authorization"
+          (concat "Basic "
+                  (base64-encode-string
+                   (format "%s:%s" opencode-server-username opencode-server-password))))))
 
 (eval-and-compile
   (cl-defun opencode-api--call (method path return-var body &key data)
@@ -57,7 +66,8 @@ and saving to CURRENT-BUFFER while running BODY."
                        (json-parse-buffer :array-type 'list
                                           :object-type 'alist)))
            :headers `(("Content-Type" . "application/json")
-                      ,(cons "x-opencode-directory" default-directory))
+                      ,(cons "x-opencode-directory" default-directory)
+                      ,(opencode--auth-header))
            ,@(when data
                `(:body (json-encode ,saved-data)))
            :then (lambda (,result)
